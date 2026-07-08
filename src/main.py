@@ -23,11 +23,16 @@ def enhance(transforms, datapath, save_loc):
     #sample = random.sample(paths, min(n, len(paths)))
 
     for path in paths:
+        # TODO : check that Image.open does not perform preprocessing
+        # cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        # TODO : check color depth of images in Gehler-Shi
+        # TODO : check convert ('rgb') processing
         image = Image.open(path).convert('RGB')
         wbalanced = transforms(image)
         newpath = os.path.join(save_loc, os.path.basename(path))
         print(newpath)
         wbalanced.save(newpath)
+        # TODO : gamma only on visualization
 
 def main():
     get_device()

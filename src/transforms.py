@@ -26,6 +26,7 @@ class WhiteBalance(nn.Module):
                 imageMaxRGB = img.amax((1,2))
                 # White Patch
                 coeffs = imageMaxRGB / 1
+                # TODO : Normalize coeffs
                 print('WP coeffs: ', coeffs)
                 # Patch application // need to fill last 2 dimensions w/None
                 wbImage = img * coeffs[:, None, None]
@@ -35,8 +36,10 @@ class WhiteBalance(nn.Module):
                 imageMeanRGB = img.mean(dim=(1,2))
                 # gray world
                 coeffs = 0.5 / imageMeanRGB
+                # TODO : Normalize coeffs
                 print('GW coeffs: ', coeffs)
                 # apply
                 wbImage = img * coeffs[:, None, None]
                 wbImage = wbImage.clamp(0, 1)
                 return wbImage
+            # TODO : Add white balance from json data illuminant.

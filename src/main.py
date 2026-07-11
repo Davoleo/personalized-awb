@@ -1,7 +1,9 @@
 import os
+import random
 
 from torchvision.transforms import v2
-from PIL import Image
+import cv2 as cv
+import numpy as np
 
 from transforms import *
 
@@ -10,41 +12,61 @@ def get_device() -> str:
     print(f"Accelerator: {device}")
     return device
 
-def enhance(transforms, datapath, save_loc):
+def show_samples(images: list[str] | list[np.ndarray], title: str = "images", cols: int = 4):
+    first = images[0]
+    if isinstance(first, str):
+        loaded = [cv.imread(p, cv.IMREAD_UNCHANGED) for p in images] # type: ignore
+    else:
+        loaded = images
+
+    n = len(loaded)
+    rows = (n + cols - 1) // cols
+    row_panels = [np.concatenate(loaded[r * cols : (r + 1) * cols], axis=1) for r in range(rows)]
+    full = np.concatenate(row_panels, axis=0)
+    full = gamma_correction(full, 0.4)
+    cv.imshow(title, full)
+    cv.waitKey(0)
+
+
+def enhance(datapath, save_loc):
     """
     Enhance image files in @datapath with @transforms and write them to the @save_loc folders
     """
     paths = [
         os.path.join(root, f)
         for root, _, files in os.walk(datapath)
-        for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+        for f in files if f.lower().endswith(('.png'))
     ]
-    print(paths)
-    #sample = random.sample(paths, min(n, len(paths)))
+
+    sample_toshow = random.sample(paths, 16)
+    to_show = []
 
     for path in paths:
-        # TODO : check that Image.open does not perform preprocessing
-        # cv2.imread(path, cv2.IMREAD_UNCHANGED)
-        # TODO : check color depth of images in Gehler-Shi
-        # TODO : check convert ('rgb') processing
-        image = Image.open(path).convert('RGB')
-        wbalanced = transforms(image)
+        image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
+        if image is None: 
+            continue
+        wbalanced = white_balance(WBAlgorithm.WHITE_PATCH, image)
+        if (path in sample_toshow):
+            to_show.append(wbalanced)
         newpath = os.path.join(save_loc, os.path.basename(path))
         print(newpath)
-        wbalanced.save(newpath)
-        # TODO : gamma only on visualization
+        cv.imwrite(newpath, wbalanced)
+
+    show_samples(to_show, title="white balanced samples")
+
 
 def main():
     get_device()
 
-    white_patch = v2.Compose([
-        v2.ToImage(), 
-        v2.ToDtype(torch.float32, scale=True),
-        WhiteBalance(WBAlgorithm.GRAY_WORLD),
-        v2.ToPILImage()
-    ])
-    enhance(white_patch, datapath='../data/Gehler-Shi', save_loc='../data/gray_world_clamped')
+    enhance(datapath='../data/Gehler-Shi', save_loc='../data/white_patch')
 
+
+def hello_cv():
+    print("OpenCV: ", cv.__version__)
+    img = np.zeros((120, 400, 3), dtype=np.uint8)
+    cv.putText(img, "OpenCV OK", (10, 80), cv.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 3)
+    cv.imshow("hello", img)
+    cv.waitKey(0)
 
 if __name__ == "__main__":
     main()

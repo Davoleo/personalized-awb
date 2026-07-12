@@ -1,11 +1,15 @@
+from numpy import ndarray
+import typing
+
 import os
 import random
 
-from torchvision.transforms import v2
+import torch
 import cv2 as cv
 import numpy as np
 
-from transforms import *
+from src import get_project_dir
+from .transforms import gamma_correction, white_balance, WBAlgorithm
 
 def get_device() -> str:
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else 'cpu'  # type: ignore
@@ -15,9 +19,12 @@ def get_device() -> str:
 def show_samples(images: list[str] | list[np.ndarray], title: str = "images", cols: int = 4):
     first = images[0]
     if isinstance(first, str):
-        loaded = [cv.imread(p, cv.IMREAD_UNCHANGED) for p in images] # type: ignore
+        images = typing.cast(list[str], images)
+        loaded = [cv.imread(p, cv.IMREAD_UNCHANGED) for p in images]
     else:
         loaded = images
+
+    loaded = typing.cast(list[ndarray], loaded)
 
     n = len(loaded)
     rows = (n + cols - 1) // cols
@@ -38,6 +45,12 @@ def enhance(datapath, save_loc):
         for f in files if f.lower().endswith(('.png'))
     ]
 
+    random.shuffle(paths)
+
+    if len(paths) == 0:
+        print(f"Data folder is empty or datapath: {datapath} is wrong")
+        exit()
+
     sample_toshow = random.sample(paths, 16)
     to_show = []
 
@@ -45,7 +58,7 @@ def enhance(datapath, save_loc):
         image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
         if image is None: 
             continue
-        wbalanced = white_balance(WBAlgorithm.WHITE_PATCH, image)
+        wbalanced = white_balance(WBAlgorithm.JSON_DATA, image, os.path.basename(path))
         if (path in sample_toshow):
             to_show.append(wbalanced)
         newpath = os.path.join(save_loc, os.path.basename(path))
@@ -55,10 +68,10 @@ def enhance(datapath, save_loc):
     show_samples(to_show, title="white balanced samples")
 
 
-def main():
+def main():   
     get_device()
-
-    enhance(datapath='../data/Gehler-Shi', save_loc='../data/white_patch')
+    dir = get_project_dir()
+    enhance(datapath=dir.joinpath('data', 'Gehler-Shi'), save_loc=dir.joinpath('data', 'json_data'))
 
 
 def hello_cv():

@@ -1,20 +1,30 @@
+from pylab import ndarray
 from enum import Enum
+import json
+from pathlib import Path
 
 import torch
 from torch import nn
-import numpy as np;
-import cv2 as cv;
+import numpy as np
+import cv2 as cv
+
+from src import get_project_dir
 
 MAX_UINT16 = 65535
 
 class WBAlgorithm(Enum):
     WHITE_PATCH = 1
     GREY_WORLD = 2
+    JSON_DATA = 3
 
-def white_balance(algorithm: WBAlgorithm, img) -> cv.typing.MatLike:
+def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typing.MatLike:
+    
+    # Convert to float32 typing
+    img_f = img.astype(np.float32)
+    img_f /= MAX_UINT16
+    wbImage: ndarray
     match algorithm:
         case WBAlgorithm.WHITE_PATCH:
-            img_f = img.astype(np.float32) / MAX_UINT16
             # max: reducing the first 2 dimensions (keep channels, as per openCV shape)
             imageMax = np.amax(img_f, (0,1))
             print("image maxes: ", imageMax)
@@ -26,14 +36,41 @@ def white_balance(algorithm: WBAlgorithm, img) -> cv.typing.MatLike:
             coeffs /= np.prod(coeffs)**(1/3)
             print('WP coeffs: ', coeffs)
             # Patch application // need to fill last 2 dimensions w/None
-            print(coeffs[None, None, :])
             wbImage = img_f * coeffs
-            # cv.imshow("debug", wbImage)
-            # cv.waitKey(0)
-            # exit(0)
-            return np.clip(wbImage * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
         case WBAlgorithm.GREY_WORLD:
-            raise NotImplementedError()
+            # mean: reducing the first 2 dimensions (keep channels, as per openCV shape)
+            imageMean = np.mean(img_f, axis=(0,1))
+            print("image means: ", imageMean)
+            # Grey World
+            coeffs = 0.5 / imageMean
+            print('pre-norm coeffs: ', coeffs)
+            coeffs /= np.prod(coeffs)**(1/3)
+            print('GW coeffs: ', coeffs)
+            # Apply patch
+            wbImage = img_f * coeffs
+        case WBAlgorithm.JSON_DATA:
+            print(filename)
+            # take illuminant from json data of the specific image and use it to whitebalance the image
+            metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
+            with open(metadata_path, 'r') as file:
+                data = json.load(file)
+            
+            illu = np.array(data['illuminant_color_raw'])
+
+            #([1,1,1] - [0.2442, 1, 0.52135872])+1 (to be multiplied as coeffs with the pixel intensities)
+            #([1,1,1] / [0.2442, 1, 0.52135872])
+
+            coeffs = (np.ones((1,3)) - illu)+1
+            #coeffs = (np.ones((1,3)) / illu)
+
+            # Geometric mean to preserve luminance
+            coeffs /= np.prod(coeffs)**(1/3)
+            
+            print("JSON coeffs ", coeffs)
+            wbImage = img_f * coeffs
+
+
+    return np.clip(wbImage * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
 
 
 def gamma_correction(image, gamma: float):
@@ -78,4 +115,6 @@ class WhiteBalance(nn.Module):
                 wbImage = img * coeffs[:, None, None]
                 wbImage = wbImage.clamp(0, 1)
                 return wbImage
-            # TODO : Add white balance from json data illuminant.
+            case WBAlgorithm.JSON_DATA:
+
+                return torch.Tensor()

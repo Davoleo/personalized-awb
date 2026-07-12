@@ -14,10 +14,6 @@ dependencies = [
     "opencv-python>=5.0.0.93",
 ]
 
-
-[tool.uv]
-package = false
-
 [tool.uv.sources]
 torch = [
 	{ index = "the_rock_nightly"},
@@ -54,4 +50,9 @@ requires-dist = [
 	"jinja2",
 	"fsspec>=0.8.5",
 	"triton==3.5.1+rocm7.13.0a20260315"
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.21",
 ]

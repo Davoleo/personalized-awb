@@ -7,10 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.4.6",
     "matplotlib (>=3.11.0,<4.0.0)",
-    "torch==2.9.1+rocm7.13.0a20260315",
-    "torchaudio==2.9.0+rocm7.13.0a20260315",
-    "torchvision==0.24.0+rocm7.13.0a20260315",
-    "triton==3.5.1+rocm7.13.0a20260315",
+    "torch==2.9.1+rocm7.14.0a20260611",
+    "torchaudio==2.9.0+rocm7.14.0a20260611",
+    "torchvision==0.24.0+rocm7.14.0a20260611",
+    "triton==3.5.1+rocm7.14.0a20260611",
     "opencv-python>=5.0.0.93",
 ]
 
@@ -40,7 +40,7 @@ url = "https://pypi.org/simple/"
 # Override "torch" metadata removing rocm[libraries (we install them separately)]
 [[tool.uv.dependency-metadata]]
 name = "torch"
-version = "2.9.1+rocm7.13.0a20260315"
+version = "2.9.1+rocm7.14.0a20260611"
 requires-dist = [
 	"filelock",
 	"typing-extensions>=4.10.0",
@@ -49,7 +49,7 @@ requires-dist = [
 	"networkx>=2.5.1",
 	"jinja2",
 	"fsspec>=0.8.5",
-	"triton==3.5.1+rocm7.13.0a20260315"
+	"triton==3.5.1+rocm7.14.0a20260611"
 ]
 
 [dependency-groups]

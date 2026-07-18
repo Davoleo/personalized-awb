@@ -1,6 +1,7 @@
 from numpy import ndarray
 import typing
 
+import argparse
 import os
 import random
 
@@ -10,6 +11,18 @@ import numpy as np
 
 from src import get_project_dir
 from .transforms import gamma_correction, white_balance, WBAlgorithm
+
+WB_ALGORITHMS = {
+    'white_patch': WBAlgorithm.WHITE_PATCH,
+    'gray_world': WBAlgorithm.GREY_WORLD,
+    'json_data': WBAlgorithm.JSON_DATA
+}
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
+parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
+args = parser.parse_args()
+
 
 def get_device() -> str:
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else 'cpu'  # type: ignore
@@ -35,7 +48,7 @@ def show_samples(images: list[str] | list[np.ndarray], title: str = "images", co
     cv.waitKey(0)
 
 
-def enhance(datapath, save_loc):
+def enhance(datapath, save_loc, algorithm: WBAlgorithm):
     """
     Enhance image files in @datapath with @transforms and write them to the @save_loc folders
     """
@@ -58,7 +71,7 @@ def enhance(datapath, save_loc):
         image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
         if image is None: 
             continue
-        wbalanced = white_balance(WBAlgorithm.GREY_WORLD, image, os.path.basename(path))
+        wbalanced = white_balance(algorithm, image, os.path.basename(path))
         if (path in sample_toshow):
             to_show.append(wbalanced)
         newpath = os.path.join(save_loc, os.path.basename(path))
@@ -73,7 +86,14 @@ def main():
     dir = get_project_dir()
     # by default numpy prints with 8 precision
     #np.set_printoptions(precision=17)
-    enhance(datapath=dir.joinpath('data', 'Gehler-Shi'), save_loc=dir.joinpath('data', 'gray_world'))
+    algorithm = None
+    match (args.wbalgorithm):
+        case 'white_patch': algorithm = WBAlgorithm.WHITE_PATCH
+        case 'gray_world': algorithm = WBAlgorithm.GREY_WORLD
+        case 'json_data': algorithm = WBAlgorithm.JSON_DATA
+        case _: raise ValueError("--algorithm should be set to one of the following values (white_patch|gray_world|json_data)")
+    
+    enhance(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.wbalgorithm), algorithm=algorithm)
 
 
 def hello_cv():

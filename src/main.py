@@ -58,7 +58,7 @@ def enhance(datapath, save_loc):
         image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
         if image is None: 
             continue
-        wbalanced = white_balance(WBAlgorithm.JSON_DATA, image, os.path.basename(path))
+        wbalanced = white_balance(WBAlgorithm.GREY_WORLD, image, os.path.basename(path))
         if (path in sample_toshow):
             to_show.append(wbalanced)
         newpath = os.path.join(save_loc, os.path.basename(path))
@@ -71,7 +71,9 @@ def enhance(datapath, save_loc):
 def main():   
     get_device()
     dir = get_project_dir()
-    enhance(datapath=dir.joinpath('data', 'Gehler-Shi'), save_loc=dir.joinpath('data', 'json_data'))
+    # by default numpy prints with 8 precision
+    #np.set_printoptions(precision=17)
+    enhance(datapath=dir.joinpath('data', 'Gehler-Shi'), save_loc=dir.joinpath('data', 'gray_world'))
 
 
 def hello_cv():

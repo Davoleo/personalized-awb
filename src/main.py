@@ -20,6 +20,7 @@ WB_ALGORITHMS = {
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
+parser.add_argument('--output', default=None, help="The output subfolder (in data/)")
 parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
 args = parser.parse_args()
 
@@ -93,7 +94,7 @@ def main():
         case 'json_data': algorithm = WBAlgorithm.JSON_DATA
         case _: raise ValueError("--algorithm should be set to one of the following values (white_patch|gray_world|json_data)")
     
-    enhance(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.wbalgorithm), algorithm=algorithm)
+    enhance(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.output if args.output is not None else args.wbalgorithm), algorithm=algorithm)
 
 
 def hello_cv():

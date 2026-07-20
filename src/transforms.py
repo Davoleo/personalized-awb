@@ -44,7 +44,6 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
             # Grey World coeffs
             coeffs = 0.5 / imageMean
         case WBAlgorithm.JSON_DATA:
-            print(filename)
             # take illuminant from json data of the specific image and use it to whitebalance the image
             metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
             with open(metadata_path, 'r') as file:
@@ -53,8 +52,7 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
             illu = data['illuminant_color_raw']
             print("illu RGB: ", illu)
             # Convert to BGR
-            # ? dtype float32 doesn't seem to have an effect to the number of 
-            illu = np.array([illu[2], illu[1], illu[0]])
+            illu = np.asarray([illu[2], illu[1], illu[0]])
             print("illu BGR: ", illu)
             # L2 Norm to normalize illuminant vector
             illu /= np.linalg.norm(illu)
@@ -116,5 +114,3 @@ class WhiteBalance(nn.Module):
             case WBAlgorithm.JSON_DATA:
 
                 return torch.Tensor()
-
-# TODO conversion to CIE XYZ 

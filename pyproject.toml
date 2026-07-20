@@ -12,6 +12,7 @@ dependencies = [
     "torchvision==0.24.0+rocm7.14.0a20260611",
     "triton==3.5.1+rocm7.14.0a20260611",
     "opencv-python>=5.0.0.93",
+    "colour-science>=0.4.7",
 ]
 
 [tool.uv.sources]

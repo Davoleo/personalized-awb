@@ -30,23 +30,40 @@ def convert_to_ciexyz(image, filename: str):
 
     _, cct = get_xyz_coords(meta)
     
+    if (cct is None):
+        raise LookupError()
+
+    
     forward_matrix = interpolate_cct_lin(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
+
+    img_xyz = np.empty(image.shape)
+    row, col, _ = image.shape
+    for y in range(row):
+        for x in range(col):
+            img_xyz[y][x] = forward_matrix @ image[y][x]
+
+    return img_xyz
+
 
 def get_xyz_coords(meta: Metadata):
     xy: ArrayLike = [0.3127, 0.3290]
-
-    while True:
+    i = 0
+    while i < 100:
         cct = colour.temperature.xy_to_CCT(xy)
         print(cct)
         color_matrix = interpolate_cct_lin(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
-        xyz = np.dot(color_matrix_inv, np.transpose(meta.illuminant))
+        xyz = color_matrix_inv @ np.transpose(meta.illuminant)
         X, Y, Z = np.asarray(xyz).flatten()
         print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]
         if np.allclose(xy, xy_new, atol=1e-6):
             return xyz, cct
         xy = xy_new
+        i += 1
+
+    print(f"!!! didn't find cct in {i} iterations, returning None !!!")
+    return (None,None)
 
 def extract_metadata(metapath: Path) -> Metadata:
     with open(metapath, 'r') as file:

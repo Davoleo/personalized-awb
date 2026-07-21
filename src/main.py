@@ -10,7 +10,8 @@ import cv2 as cv
 import numpy as np
 
 from src import get_project_dir
-from .transforms import gamma_correction, white_balance, WBAlgorithm
+from src.transforms import gamma_correction, white_balance, WBAlgorithm
+from src.ciexyz import convert_to_ciexyz
 
 WB_ALGORITHMS = {
     'white_patch': WBAlgorithm.WHITE_PATCH,
@@ -18,12 +19,14 @@ WB_ALGORITHMS = {
     'json_data': WBAlgorithm.JSON_DATA
 }
 
+MAX_UINT16 = 65535
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
 parser.add_argument('--output', default=None, help="The output subfolder (in data/)")
 parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
+parser.add_argument('--ciexyz', action='store_true', default=False, help="Whether the software should perform CIE XYZ conversion or not (after WB)")
 args = parser.parse_args()
-
 
 def get_device() -> str:
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else 'cpu'  # type: ignore
@@ -49,7 +52,7 @@ def show_samples(images: list[str] | list[np.ndarray], title: str = "images", co
     cv.waitKey(0)
 
 
-def enhance(datapath, save_loc, algorithm: WBAlgorithm):
+def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
     """
     Enhance image files in @datapath with @transforms and write them to the @save_loc folders
     """
@@ -72,12 +75,34 @@ def enhance(datapath, save_loc, algorithm: WBAlgorithm):
         image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
         if image is None: 
             continue
-        wbalanced = white_balance(algorithm, image, os.path.basename(path))
+        
+        filename = os.path.basename(path)
+
+        # Convert to float32 typing
+        image = image.astype(np.float32)
+        image /= MAX_UINT16
+
+        # run white balancing
+        image = white_balance(algorithm, image, filename)
+
+        # run conversion to camera-independent color space
+        try:
+            if args.ciexyz:
+                image = convert_to_ciexyz(image, filename)
+        except LookupError:
+            print("CIE XYZ conversion was skipped for: ", filename)
+            pass
+
+        # convert back to UINT16 and clip any value that goes over max
+        image = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
+
         if (path in sample_toshow):
-            to_show.append(wbalanced)
+            to_show.append(image)
+        
         newpath = os.path.join(save_loc, os.path.basename(path))
         print(newpath)
-        cv.imwrite(newpath, wbalanced)
+
+        cv.imwrite(newpath, image)
 
     show_samples(to_show, title="white balanced samples")
 
@@ -94,7 +119,7 @@ def main():
         case 'json_data': algorithm = WBAlgorithm.JSON_DATA
         case _: raise ValueError("--algorithm should be set to one of the following values (white_patch|gray_world|json_data)")
     
-    enhance(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.output if args.output is not None else args.wbalgorithm), algorithm=algorithm)
+    pipeline(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.output if args.output is not None else args.wbalgorithm), algorithm=algorithm)
 
 
 def hello_cv():

@@ -18,17 +18,13 @@ class WBAlgorithm(Enum):
     JSON_DATA = 3
 
 def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typing.MatLike:
-
-    # Convert to float32 typing
-    img_f = img.astype(np.float32)
-    img_f /= MAX_UINT16
     wbImage: ndarray
     coeffs: ndarray
 
     match algorithm:
         case WBAlgorithm.WHITE_PATCH:
             # max: reducing the first 2 dimensions (keep channels, as per openCV shape)
-            imageMax = np.amax(img_f, (0,1))
+            imageMax = np.amax(img, (0,1))
             print("image maxes: ", imageMax)
             # L2 Norm to normalize illuminant vector
             imageMax /= np.linalg.norm(imageMax)
@@ -37,7 +33,7 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
             coeffs = 1.0 / imageMax
         case WBAlgorithm.GREY_WORLD:
             # mean: reducing the first 2 dimensions (keep channels, as per openCV shape)
-            imageMean = np.mean(img_f, axis=(0,1))
+            imageMean = np.mean(img, axis=(0,1))
             print("image means: ", imageMean)
             imageMean /= np.linalg.norm(imageMean)
             print("image means norm: ", imageMean)
@@ -50,23 +46,16 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
                 data = json.load(file)
 
             illu = data['illuminant_color_raw']
-            print("illu RGB: ", illu)
             # Convert to BGR
             illu = np.asarray([illu[2], illu[1], illu[0]])
-            print("illu BGR: ", illu)
             # L2 Norm to normalize illuminant vector
             illu /= np.linalg.norm(illu)
-            print("illu NORM: ", illu)
             # json coeffs
             coeffs = (np.ones((1,3)) / illu)
 
     # Patch application
-    wbImage = img_f * coeffs
-    imgFinal = np.clip(wbImage * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
-    # cv.imshow("salofa", gamma_correction(imgFinal, 0.4))
-    # cv.waitKey(0)
-    # exit(0)
-    return imgFinal
+    wbImage = img * coeffs
+    return wbImage
 
 
 def gamma_correction(image, gamma: float):

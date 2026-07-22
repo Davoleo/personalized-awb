@@ -28,13 +28,13 @@ def convert_to_ciexyz(image, filename: str):
     metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
     meta = extract_metadata(metadata_path)
 
-    _, cct = get_xyz_coords(meta)
+    _, cct = approximate_cct(meta)
     
     if (cct is None):
         raise LookupError()
 
     
-    forward_matrix = interpolate_cct_lin(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
+    forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
 
     img_xyz = np.empty(image.shape)
     row, col, _ = image.shape
@@ -45,13 +45,13 @@ def convert_to_ciexyz(image, filename: str):
     return img_xyz
 
 
-def get_xyz_coords(meta: Metadata):
+def approximate_cct(meta: Metadata):
     xy: ArrayLike = [0.3127, 0.3290]
     i = 0
     while i < 100:
         cct = colour.temperature.xy_to_CCT(xy)
         print(cct)
-        color_matrix = interpolate_cct_lin(cct, meta.color_matrix_1, meta.color_matrix_2)
+        color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
         xyz = color_matrix_inv @ np.transpose(meta.illuminant)
         X, Y, Z = np.asarray(xyz).flatten()
@@ -74,7 +74,7 @@ def extract_metadata(metapath: Path) -> Metadata:
     illu[[0,2]] = illu[[2,0]]
     
 
-    # BGR: Swap color plane rows (first and last columns)
+    # BGR: Swap color plane rows (first and last rows)
     cm1 = np.matrix(data['cm1'])
     cm1[[0,2], :] = cm1[[2,0], :]
     cm2 = np.matrix(data['cm2'])
@@ -89,7 +89,7 @@ def extract_metadata(metapath: Path) -> Metadata:
 
     return Metadata(illu, cm1, cm2, fm1, fm2)
 
-def interpolate_cct_lin(cct, m1: ArrayLike, m2: ArrayLike):
+def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike):
     """cct is the interpolator temperature value"""
     num = (1 / cct) - (1 / D65_CCT)
     den = (1 / STANDARD_A_CCT) - (1 / D65_CCT)

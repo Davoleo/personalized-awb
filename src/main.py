@@ -93,6 +93,8 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
             print("CIE XYZ conversion was skipped for: ", filename)
             pass
 
+        # TODO convert to sRGB via skimage
+        
         # convert back to UINT16 and clip any value that goes over max
         image = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
 

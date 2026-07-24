@@ -35,21 +35,29 @@ def convert_to_ciexyz(image, filename: str):
 
     
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
-
-    img_xyz = np.empty(image.shape)
+    forward_matrix = np.array(forward_matrix)
     row, col, _ = image.shape
-    for y in range(row):
-        for x in range(col):
-            img_xyz[y][x] = forward_matrix @ image[y][x]
 
-    return img_xyz
+    # swap color channel flatten all dimensions except for colors
+    image = image.transpose(2,0,1).reshape(3, row*col)
+    # TODO May need transposed forward matrix
+    image = forward_matrix @ image
+    # recompose image
+    image = image.reshape(3, row, col).transpose(1,2,0)
+
+    return image
 
 
 def approximate_cct(meta: Metadata):
     xy: ArrayLike = [0.3127, 0.3290]
+    cct_white = 6508
     i = 0
+
+    # TODO Catch warnings as exceptions and return cct_white as a fallback
     while i < 100:
-        cct = colour.temperature.xy_to_CCT(xy)
+        # convert to UV first to use Robertson's algorithm which is more robust than the default xy_to_CCT of the colour-science lib
+        uv = colour.models.xy_to_UCS_uv(xy)
+        cct, _ = colour.temperature.uv_to_CCT_Robertson1968(uv)
         print(cct)
         color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
@@ -74,6 +82,7 @@ def extract_metadata(metapath: Path) -> Metadata:
     illu[[0,2]] = illu[[2,0]]
     
 
+    # TODO USE RGB AS STANDARD
     # BGR: Swap color plane rows (first and last rows)
     cm1 = np.matrix(data['cm1'])
     cm1[[0,2], :] = cm1[[2,0], :]
@@ -100,6 +109,6 @@ def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike):
     return CM
 
 if __name__ == '__main__':
-    image_path = get_project_dir() / 'data' / 'Gehler-Shi' / '8D5U5534_sensorname_Canon1D.png'
+    image_path = get_project_dir() / 'data' / 'Gehler-Shi' / 'IMG_0596_sensorname_Canon5D.png'
     image = cv.imread(image_path, flags=cv.IMREAD_UNCHANGED)
     converted = convert_to_ciexyz(image, os.path.basename(image_path))

@@ -8,6 +8,7 @@ import random
 import torch
 import cv2 as cv
 import numpy as np
+from matplotlib import pyplot as plt
 
 from src import get_project_dir
 from src.transforms import gamma_correction, white_balance, WBAlgorithm
@@ -72,9 +73,13 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
     to_show = []
 
     for path in paths:
+        #? cv.IMREAD_COLOR_RGB doesn't seem to work to convert directly on read https://docs.opencv.org/4.13.0/d8/d6a/group__imgcodecs__flags.html#gga61d9b0126a3e57d9277ac48327799c80a18afb429fb71972a327314b2f0d8d56a
         image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
         if image is None: 
             continue
+
+        # convert to RGB format
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         
         filename = os.path.basename(path)
 
@@ -93,6 +98,7 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
         
         # convert back to UINT16 and clip any value that goes over max
         image = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
+        image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
 
         if (path in sample_toshow):
             to_show.append(image)

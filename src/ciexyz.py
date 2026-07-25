@@ -34,12 +34,10 @@ def convert_to_ciexyz(image, filename: str):
     warnings.filterwarnings("default")
     
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
-    forward_matrix = np.array(forward_matrix)
     row, col, _ = image.shape
 
     # swap color channel flatten all dimensions except for colors
     image = image.transpose(2,0,1).reshape(3, row*col)
-    # TODO May need transposed forward matrix
     image = forward_matrix @ image
     # recompose image
     image = image.reshape(3, row, col).transpose(1,2,0)
@@ -50,8 +48,9 @@ def convert_to_ciexyz(image, filename: str):
 def approximate_cct(meta: Metadata):
     xy: ArrayLike = [0.3127, 0.3290]
     cct_white = 6508
+    i = 0
 
-    while True:
+    while i < 1000:
         # convert to UV first to use Robertson's algorithm which is more robust than the default xy_to_CCT of the colour-science lib
         try:
             uv = colour.models.xy_to_UCS_uv(xy)
@@ -70,33 +69,25 @@ def approximate_cct(meta: Metadata):
         if np.allclose(xy, xy_new, atol=1e-6):
             return cct
         xy = xy_new
+        i += 1
+
+    print("WARN: CCT approximation did not converge -> returning base cct value")
+    return cct_white
 
 def extract_metadata(metapath: Path) -> Metadata:
     with open(metapath, 'r') as file:
         data = json.load(file)
     
     illu = np.array(data['illuminant_color_raw'])
-    # BGR format
-    illu[[0,2]] = illu[[2,0]]
     
-
-    # TODO USE RGB AS STANDARD
-    # BGR: Swap color plane rows (first and last rows)
-    cm1 = np.matrix(data['cm1'])
-    cm1[[0,2], :] = cm1[[2,0], :]
-    cm2 = np.matrix(data['cm2'])
-    cm2[[0,2], :] = cm2[[2,0], :]
-
-    # BGR: Swap color plane columns (first and last columns)
-    fm1 = np.matrix(data['fm1'])
-    fm1[:, [0,2]] = fm1[:, [2,0]] 
-    fm2 = np.matrix(data['fm2'])
-    fm2[:, [0,2]] = fm2[:, [2,0]] 
-
+    cm1 = np.array(data['cm1'])
+    cm2 = np.array(data['cm2'])
+    fm1 = np.array(data['fm1'])
+    fm2 = np.array(data['fm2'])
 
     return Metadata(illu, cm1, cm2, fm1, fm2)
 
-def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike):
+def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
     """cct is the interpolator temperature value"""
     num = (1 / cct) - (1 / D65_CCT)
     den = (1 / STANDARD_A_CCT) - (1 / D65_CCT)

@@ -46,8 +46,6 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
                 data = json.load(file)
 
             illu = data['illuminant_color_raw']
-            # Convert to BGR
-            illu = np.asarray([illu[2], illu[1], illu[0]])
             # L2 Norm to normalize illuminant vector
             illu /= np.linalg.norm(illu)
             # json coeffs

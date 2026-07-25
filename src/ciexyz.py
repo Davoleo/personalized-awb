@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import warnings
 
 from numpy.typing import ArrayLike
 import numpy as np
@@ -28,11 +29,9 @@ def convert_to_ciexyz(image, filename: str):
     metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
     meta = extract_metadata(metadata_path)
 
-    _, cct = approximate_cct(meta)
-    
-    if (cct is None):
-        raise LookupError()
-
+    warnings.filterwarnings("error")
+    cct = approximate_cct(meta)
+    warnings.filterwarnings("default")
     
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
     forward_matrix = np.array(forward_matrix)
@@ -51,13 +50,16 @@ def convert_to_ciexyz(image, filename: str):
 def approximate_cct(meta: Metadata):
     xy: ArrayLike = [0.3127, 0.3290]
     cct_white = 6508
-    i = 0
 
-    # TODO Catch warnings as exceptions and return cct_white as a fallback
-    while i < 100:
+    while True:
         # convert to UV first to use Robertson's algorithm which is more robust than the default xy_to_CCT of the colour-science lib
-        uv = colour.models.xy_to_UCS_uv(xy)
-        cct, _ = colour.temperature.uv_to_CCT_Robertson1968(uv)
+        try:
+            uv = colour.models.xy_to_UCS_uv(xy)
+            cct, _ = colour.temperature.uv_to_CCT_Robertson1968(uv)
+        except RuntimeWarning:
+            print("WARN: CCT approximation failed - returning base cct value")
+            return cct_white
+
         print(cct)
         color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
@@ -66,12 +68,8 @@ def approximate_cct(meta: Metadata):
         print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]
         if np.allclose(xy, xy_new, atol=1e-6):
-            return xyz, cct
+            return cct
         xy = xy_new
-        i += 1
-
-    print(f"!!! didn't find cct in {i} iterations, returning None !!!")
-    return (None,None)
 
 def extract_metadata(metapath: Path) -> Metadata:
     with open(metapath, 'r') as file:

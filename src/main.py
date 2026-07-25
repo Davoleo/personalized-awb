@@ -86,12 +86,8 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
         image = white_balance(algorithm, image, filename)
 
         # run conversion to camera-independent color space
-        try:
-            if args.ciexyz:
-                image = convert_to_ciexyz(image, filename)
-        except LookupError:
-            print("CIE XYZ conversion was skipped for: ", filename)
-            pass
+        if args.ciexyz:
+            image = convert_to_ciexyz(image, filename)
 
         # TODO convert to sRGB via skimage
         

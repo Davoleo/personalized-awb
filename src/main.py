@@ -8,7 +8,7 @@ import random
 import torch
 import cv2 as cv
 import numpy as np
-from matplotlib import pyplot as plt
+import skimage as ski
 
 from src import get_project_dir
 from src.transforms import gamma_correction, white_balance, WBAlgorithm
@@ -21,12 +21,14 @@ WB_ALGORITHMS = {
 }
 
 MAX_UINT16 = 65535
+MAX_UINT8 = 255
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
 parser.add_argument('--output', default=None, help="The output subfolder (in data/)")
 parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
 parser.add_argument('--ciexyz', action='store_true', default=False, help="Whether the software should perform CIE XYZ conversion or not (after WB)")
+parser.add_argument('--srgb', action='store_true', default=False, help="Whether the conversion to sRGB 8bit channels should be performed at the end")
 args = parser.parse_args()
 
 def get_device() -> str:
@@ -34,7 +36,7 @@ def get_device() -> str:
     print(f"Accelerator: {device}")
     return device
 
-def show_samples(images: list[str] | list[np.ndarray], title: str = "images", cols: int = 4):
+def show_samples(images: list[str] | list[np.ndarray], title: str = "images", cols: int = 4, gamma = None):
     first = images[0]
     if isinstance(first, str):
         images = typing.cast(list[str], images)
@@ -48,7 +50,8 @@ def show_samples(images: list[str] | list[np.ndarray], title: str = "images", co
     rows = (n + cols - 1) // cols
     row_panels = [np.concatenate(loaded[r * cols : (r + 1) * cols], axis=1) for r in range(rows)]
     full = np.concatenate(row_panels, axis=0)
-    full = gamma_correction(full, 0.4)
+    if gamma is not None:
+        full = gamma_correction(full, gamma)
     cv.imshow(title, full)
     cv.waitKey(0)
 
@@ -94,21 +97,25 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
         if args.ciexyz:
             image = convert_to_ciexyz(image, filename)
 
-        # TODO convert to sRGB via skimage
+        if args.srgb:
+            image = ski.color.xyz2rgb(image)
         
         # convert back to UINT16 and clip any value that goes over max
-        image = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
-        image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
+        if args.srgb:
+            final = np.clip(image * MAX_UINT8, 0, MAX_UINT8).astype(np.uint8)
+        else:
+            final = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
 
+        final = cv.cvtColor(final, cv.COLOR_RGB2BGR)
         if (path in sample_toshow):
-            to_show.append(image)
+            to_show.append(final)
         
         newpath = os.path.join(save_loc, os.path.basename(path))
         print(newpath)
 
-        cv.imwrite(newpath, image)
+        cv.imwrite(newpath, final)
 
-    show_samples(to_show, title="white balanced samples")
+    show_samples(to_show, title="white balanced samples", )
 
 
 def main():   

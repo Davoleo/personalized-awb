@@ -11,13 +11,12 @@ import numpy as np
 import skimage as ski
 
 from src import get_project_dir
-from src.transforms import gamma_correction, white_balance, WBAlgorithm
+from src.wbalance import gamma_correction, white_balance, WBAlgorithm
 from src.ciexyz import convert_to_ciexyz
 
 WB_ALGORITHMS = {
     'white_patch': WBAlgorithm.WHITE_PATCH,
     'gray_world': WBAlgorithm.GREY_WORLD,
-    'json_data': WBAlgorithm.JSON_DATA
 }
 
 MAX_UINT16 = 65535
@@ -127,7 +126,6 @@ def main():
     match (args.wbalgorithm):
         case 'white_patch': algorithm = WBAlgorithm.WHITE_PATCH
         case 'gray_world': algorithm = WBAlgorithm.GREY_WORLD
-        case 'json_data': algorithm = WBAlgorithm.JSON_DATA
         case _: raise ValueError("--algorithm should be set to one of the following values (white_patch|gray_world|json_data)")
     
     pipeline(datapath=dir.joinpath('data', args.input), save_loc=dir.joinpath('data', args.output if args.output is not None else args.wbalgorithm), algorithm=algorithm)

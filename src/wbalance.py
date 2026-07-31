@@ -1,24 +1,18 @@
 from pylab import ndarray
 from enum import Enum
-import json
-from pathlib import Path
 
 import torch
 from torch import nn
 import numpy as np
 import cv2 as cv
 
-from src import get_project_dir
-
 MAX_UINT16 = 65535
 
 class WBAlgorithm(Enum):
     WHITE_PATCH = 1
     GREY_WORLD = 2
-    JSON_DATA = 3
 
 def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typing.MatLike:
-    wbImage: ndarray
     coeffs: ndarray
 
     match algorithm:
@@ -39,17 +33,6 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typ
             print("image means norm: ", imageMean)
             # Grey World coeffs
             coeffs = 0.5 / imageMean
-        case WBAlgorithm.JSON_DATA:
-            # take illuminant from json data of the specific image and use it to whitebalance the image
-            metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
-            with open(metadata_path, 'r') as file:
-                data = json.load(file)
-
-            illu = data['illuminant_color_raw']
-            # L2 Norm to normalize illuminant vector
-            illu /= np.linalg.norm(illu)
-            # json coeffs
-            coeffs = (np.ones((1,3)) / illu)
 
     # Patch application
     wbImage = img * coeffs

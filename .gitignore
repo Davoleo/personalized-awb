@@ -14,3 +14,6 @@ wheels/
 
 # datasets
 data
+
+# external libraries, executables and code
+ext/

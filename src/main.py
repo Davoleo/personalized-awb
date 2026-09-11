@@ -106,7 +106,7 @@ def pipeline(datapath, save_loc, algorithm: WBAlgorithm):
             final = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
 
         final = cv.cvtColor(final, cv.COLOR_RGB2BGR)
-        if (path in sample_toshow):
+        if path in sample_toshow:
             to_show.append(final)
         
         newpath = os.path.join(save_loc, os.path.basename(path))

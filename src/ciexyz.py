@@ -1,48 +1,33 @@
 import os
-from dataclasses import dataclass
-import json
-from pathlib import Path
 import warnings
 
-from numpy.typing import ArrayLike
-import numpy as np
-import cv2 as cv
 import colour
+import cv2 as cv
+import numpy as np
+from numpy.typing import ArrayLike
 
-from src import get_project_dir
+from src import get_project_dir, Metadata
 
 STANDARD_A_CCT = 2856
 D65_CCT = 6500
 
-@dataclass
-class Metadata:
-    """Gehler-shi metadata"""
-    illuminant: np.typing.ArrayLike
-    color_matrix_1: np.typing.ArrayLike
-    color_matrix_2: np.typing.ArrayLike
-    forward_matrix_1: np.typing.ArrayLike
-    forward_matrix_2: np.typing.ArrayLike
 
-
-def convert_to_ciexyz(image, filename: str):
+def convert_to_ciexyz(img, meta: Metadata):
     """Converts image colors to be device-independent"""
-    metadata_path = get_project_dir() / "data" / 'Gehler-Shi' / Path(filename.strip(".png") + "_metadata.json")
-    meta = extract_metadata(metadata_path)
-
     warnings.filterwarnings("error")
     cct = approximate_cct(meta)
     warnings.filterwarnings("default")
     
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
-    row, col, _ = image.shape
+    row, col, _ = img.shape
 
     # swap color channel flatten all dimensions except for colors
-    image = image.transpose(2,0,1).reshape(3, row*col)
-    image = forward_matrix @ image
+    img = img.transpose(2, 0, 1).reshape(3, row * col)
+    img = forward_matrix @ img
     # recompose image
-    image = image.reshape(3, row, col).transpose(1,2,0)
+    img = img.reshape(3, row, col).transpose(1, 2, 0)
 
-    return image
+    return img
 
 
 def approximate_cct(meta: Metadata):
@@ -59,12 +44,13 @@ def approximate_cct(meta: Metadata):
             print("WARN: CCT approximation failed - returning base cct value")
             return cct_white
 
-        print(cct)
+        #print(cct)
         color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
-        xyz = color_matrix_inv @ np.transpose(meta.illuminant)
+        # ? illuminants[0] is an assumption, should probably be adapted to the wb_algorithm
+        xyz = color_matrix_inv @ np.transpose(meta.illuminants[0])
         X, Y, Z = np.asarray(xyz).flatten()
-        print("X Y Z: ", X, Y, Z)
+        #print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]
         if np.allclose(xy, xy_new, atol=1e-6):
             return cct
@@ -73,19 +59,6 @@ def approximate_cct(meta: Metadata):
 
     print("WARN: CCT approximation did not converge -> returning base cct value")
     return cct_white
-
-def extract_metadata(metapath: Path) -> Metadata:
-    with open(metapath, 'r') as file:
-        data = json.load(file)
-    
-    illu = np.array(data['illuminant_color_raw'])
-    
-    cm1 = np.array(data['cm1'])
-    cm2 = np.array(data['cm2'])
-    fm1 = np.array(data['fm1'])
-    fm2 = np.array(data['fm2'])
-
-    return Metadata(illu, cm1, cm2, fm1, fm2)
 
 def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
     """cct is the interpolator temperature value"""

@@ -147,6 +147,8 @@ def main():
 
         # convert to uint16 and clamp 0:1 to avoid overflow
         image = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
+        # convert to BGR to be compatible with imwrite
+        image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
 
         newpath = Path(path.replace(args.input_dir, args.output_dir).replace('.tiff', '.png'))
         os.makedirs(newpath.parent, exist_ok=True)

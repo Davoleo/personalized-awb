@@ -6,43 +6,56 @@ from torch import nn
 import numpy as np
 import cv2 as cv
 
+from src import Metadata
+
 MAX_UINT16 = 65535
 
 class WBAlgorithm(Enum):
-    WHITE_PATCH = 1
-    GREY_WORLD = 2
+    ILLUMINANT1 = 1
+    ILLUMINANT2 = 2
+    ILLUMINANT3 = 3
+    WHITE_PATCH = 4
+    GREY_WORLD = 5
 
-def white_balance(algorithm: WBAlgorithm, img: ndarray, filename: str) -> cv.typing.MatLike:
+def white_balance(algorithm: WBAlgorithm, img: ndarray, meta: Metadata) -> cv.typing.MatLike:
     coeffs: ndarray
 
     match algorithm:
         case WBAlgorithm.WHITE_PATCH:
             # max: reducing the first 2 dimensions (keep channels, as per openCV shape)
-            imageMax = np.amax(img, (0,1))
-            print("image maxes: ", imageMax)
+            image_max = np.amax(img, (0,1))
+            #print("image maxes: ", image_max)
             # L2 Norm to normalize illuminant vector
-            imageMax /= np.linalg.norm(imageMax)
-            print("norm image maxes: ", imageMax)
+            image_max /= np.linalg.norm(image_max)
+            #print("norm image maxes: ", image_max)
             # White Patch coeffs
-            coeffs = 1.0 / imageMax
+            coeffs = 1.0 / image_max
         case WBAlgorithm.GREY_WORLD:
             # mean: reducing the first 2 dimensions (keep channels, as per openCV shape)
-            imageMean = np.mean(img, axis=(0,1))
-            print("image means: ", imageMean)
-            imageMean /= np.linalg.norm(imageMean)
-            print("image means norm: ", imageMean)
+            image_mean = np.mean(img, axis=(0,1))
+            #print("image means: ", image_mean)
+            image_mean /= np.linalg.norm(image_mean)
+            #print("image means norm: ", image_mean)
             # Grey World coeffs
-            coeffs = 0.5 / imageMean
+            coeffs = 0.5 / image_mean
+        case WBAlgorithm.ILLUMINANT1 | WBAlgorithm.ILLUMINANT2 | WBAlgorithm.ILLUMINANT3:
+            alg = algorithm.value-1
+            if alg >= meta.n_illums:
+                raise "error: can't w_balance on illuminant that doesn't exist on the image!"
+
+            ill = meta.illuminants[alg]
+            ill /= np.linalg.norm(ill)
+            coeffs = np.ones(3) / ill
 
     # Patch application
-    wbImage = img * coeffs
-    return wbImage
+    wb_image = img * coeffs
+    return wb_image
 
 
 def gamma_correction(image, gamma: float):
     lookup_table = np.empty((1, MAX_UINT16+1), np.uint16)
     for i in range(MAX_UINT16+1):
-        lookup_table[0,i] = np.clip(pow(i / (MAX_UINT16), gamma) * (MAX_UINT16), 0, MAX_UINT16)
+        lookup_table[0,i] = np.clip(pow(i / MAX_UINT16, gamma) * MAX_UINT16, 0, MAX_UINT16)
 
     return cv.LUT(image, lookup_table)
 

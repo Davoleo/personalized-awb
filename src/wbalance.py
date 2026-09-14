@@ -1,14 +1,15 @@
-from pylab import ndarray
 from enum import Enum
+from pathlib import Path
 
-import torch
-from torch import nn
-import numpy as np
 import cv2 as cv
+import numpy as np
+from numpy import ndarray
 
+import src.utils as utils
 from src import Metadata
 
 MAX_UINT16 = 65535
+COORDS_RATIO = 0.179
 
 class WBAlgorithm(Enum):
     ILLUMINANT1 = 1
@@ -16,8 +17,10 @@ class WBAlgorithm(Enum):
     ILLUMINANT3 = 3
     WHITE_PATCH = 4
     GREY_WORLD = 5
+    ILLU_MAP_MEAN = 6
+    ILLU_MAP_W_MEAN = 7
 
-def white_balance(algorithm: WBAlgorithm, img: ndarray, meta: Metadata) -> cv.typing.MatLike:
+def white_balance(algorithm: WBAlgorithm, img: ndarray, meta: Metadata, illuminant_map: np.ndarray) -> cv.typing.MatLike:
     coeffs: ndarray
 
     match algorithm:
@@ -43,9 +46,24 @@ def white_balance(algorithm: WBAlgorithm, img: ndarray, meta: Metadata) -> cv.ty
             if alg >= meta.n_illums:
                 raise "error: can't w_balance on illuminant that doesn't exist on the image!"
 
-            ill = meta.illuminants[alg]
-            ill /= np.linalg.norm(ill)
-            coeffs = np.ones(3) / ill
+            illu = meta.illuminants[alg]
+            illu /= np.linalg.norm(illu)
+            coeffs = np.ones(3) / illu
+        case WBAlgorithm.ILLU_MAP_MEAN:
+            # only keep third dimension [color channels]
+            illu = illuminant_map.mean(axis=(0,1))
+            illu /= np.linalg.norm(illu)
+            coeffs = np.ones(3) / illu
+            pass
+        case WBAlgorithm.ILLU_MAP_W_MEAN:
+            # weighted mean based on the green channel
+            weights = illuminant_map[:,:,1]
+            illu = np.sum(
+                illuminant_map * weights[:,:,None],
+                axis=(1, 0)
+            ) / np.sum(weights)
+            illu /= np.linalg.norm(illu)
+            coeffs = np.ones(3) / illu
 
     # Patch application
     wb_image = img * coeffs
@@ -60,40 +78,61 @@ def gamma_correction(image, gamma: float):
     return cv.LUT(image, lookup_table)
 
 
-## OLD white balancing via torch tensor modules
-class WhiteBalance(nn.Module):
-    """
-    White Balance transform.
-    Supports different 'WBAlgorithm's
-    """
-    def __init__(self, algorithm: WBAlgorithm) -> None:
-        super().__init__()
-        self.algorithm = algorithm
+def illu_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: Metadata):
 
-    def forward(self, img: torch.Tensor) -> torch.Tensor:
+    #full_img_str = "12" if meta.n_illums == 2 else "123"
 
-        match self.algorithm:
-            case WBAlgorithm.WHITE_PATCH:
-                # max: reducing the last 2 dimensions (keep channels)
-                imageMaxRGB = img.amax((1,2))
-                # White Patch
-                coeffs = imageMaxRGB / 1
-                # TODO : Normalize coeffs
-                print('WP coeffs: ', coeffs)
-                # Patch application // need to fill last 2 dimensions w/None
-                wbImage = img * coeffs[:, None, None]
-                return wbImage
-            case WBAlgorithm.GREY_WORLD:
-                # mean: reducing the last 2 dimensions (keep channels)
-                imageMeanRGB = img.mean(dim=(1,2))
-                # gray world
-                coeffs = 0.5 / imageMeanRGB
-                # TODO : Normalize coeffs
-                print('GW coeffs: ', coeffs)
-                # apply
-                wbImage = img * coeffs[:, None, None]
-                wbImage = wbImage.clamp(0, 1)
-                return wbImage
-            case WBAlgorithm.JSON_DATA:
+    img_l1: np.ndarray = utils.read_image(dir_path / f"Place{place_i}" / f"Place{place_i}_1.png")
+    l1 = meta.illuminants[0]
+    l1 /= np.linalg.norm(l1)
+    l2 = meta.illuminants[1]
+    l2 /= np.linalg.norm(l2)
 
-                return torch.Tensor()
+    if meta.n_illums == 2:
+        diff = full_img.astype(np.int32) - img_l1.astype(np.int32)
+        img_l2 = np.clip(diff, 0, MAX_UINT16).astype(np.uint16)
+        # use green channel as estimate for the scaling term [light intensity]
+        g_l1 = img_l1[:, :, 1]
+        g_l2 = img_l2[:, :, 1]
+        # alpha = coefficient map
+        denom = g_l1 + g_l2
+        denom = np.maximum(denom, 1e-8)
+        alpha = g_l1 / denom
+        alpha = np.clip(alpha, 0, 1)
+        # linear combination of coefficient map and the 2 illuminants.
+        l12 = alpha[:,:,None] * l1 + (1-alpha)[:,:,None] * l2
+        l12 = l12[..., [2,1,0]]
+        return l12
+
+    elif meta.n_illums == 3:
+        # normalize l3
+        l3 = meta.illuminants[2]
+        l3 /= np.linalg.norm(l3)
+
+        img_l12 = utils.read_image(dir_path / f"Place{place_i}" / f"Place{place_i}_12.png")
+        diff_l2 = img_l12.astype(np.int32) - img_l1.astype(np.int32)
+        img_l2 = np.clip(diff_l2, 0, MAX_UINT16).astype(np.uint16)
+
+        img_l13 = utils.read_image(dir_path / f"Place{place_i}" / f"Place{place_i}_13.png")
+        diff_l3 = img_l13.astype(np.int32) - img_l1.astype(np.int32)
+        img_l3 = np.clip(diff_l3, 0, MAX_UINT16).astype(np.uint16)
+
+        g_l1 = img_l1[:,:,1]
+        g_l2 = img_l2[:,:,1]
+        g_l3 = img_l3[:,:,1]
+
+        denom = g_l1 + g_l2 + g_l3
+
+        # avoid /0
+        denom = np.maximum(denom, 1e-8)
+
+        alpha1 = g_l1 / denom
+        alpha2 = g_l2 / denom
+        alpha3 = g_l3 / denom
+
+        l123 = alpha1[:,:,None] * l1 + alpha2[:,:,None] * l2 + alpha3[:,:,None] + l3
+        # convert BGR -> RGB
+        l123 = l123[..., [2, 1, 0]]
+        return l123
+    else:
+        raise ValueError("metadata n_illums has has an invalid value")

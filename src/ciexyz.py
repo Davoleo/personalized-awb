@@ -2,10 +2,10 @@ import os
 import warnings
 
 import colour
-import cv2 as cv
 import numpy as np
 from numpy.typing import ArrayLike
 
+import src.utils as utils
 from src import get_project_dir, Metadata
 
 STANDARD_A_CCT = 2856
@@ -72,5 +72,5 @@ def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
 
 if __name__ == '__main__':
     image_path = get_project_dir() / 'data' / 'Gehler-Shi' / 'IMG_0596_sensorname_Canon5D.png'
-    image = cv.imread(image_path, flags=cv.IMREAD_UNCHANGED)
+    image = utils.read_image(image_path)
     converted = convert_to_ciexyz(image, os.path.basename(image_path))

@@ -14,8 +14,9 @@ import numpy as np
 import skimage as ski
 
 from src import get_project_dir, Metadata
-from src.wbalance import gamma_correction, white_balance, WBAlgorithm
+from src.wbalance import gamma_correction, white_balance, WBAlgorithm, illu_map
 from src.ciexyz import convert_to_ciexyz
+import src.utils as utils
 
 WB_ALGORITHMS = {
     'white_patch': WBAlgorithm.WHITE_PATCH,
@@ -23,10 +24,14 @@ WB_ALGORITHMS = {
     'illuminant1': WBAlgorithm.ILLUMINANT1,
     'illuminant2': WBAlgorithm.ILLUMINANT2,
     'illuminant3': WBAlgorithm.ILLUMINANT3,
+    'illu_map_mean': WBAlgorithm.ILLU_MAP_MEAN,
+    'illu_map_wmean': WBAlgorithm.ILLU_MAP_W_MEAN
 }
 
 MAX_UINT16 = 65535
 MAX_UINT8 = 255
+
+SONY_N_PLACES = 1317
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
@@ -82,24 +87,6 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     """
     Enhance image files in @datapath with @transforms and write them to the @save_loc folders
     """
-    paths = [
-        os.path.join(root, f)
-        for root, _, files in os.walk(datapath)
-        for f in files if f.lower().endswith('.png')
-    ]
-
-    random.shuffle(paths)
-
-    if len(paths) == 0:
-        print(f"Data folder is empty or datapath: {datapath} is wrong")
-        exit()
-
-    sample_toshow = random.sample(paths, 16)
-    to_show = []
-
-    # skip everything we don't plan to show in dry runs
-    if args.dry_run:
-        paths = sample_toshow
 
     # build  data/{brand}/{brand}_meta.json.
     brand = datapath.parts[-1]
@@ -108,37 +95,49 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     with open(global_metapath, 'r') as f:
         global_meta = json.load(f)
 
-    for path in paths:
-        #? cv.IMREAD_COLOR_RGB doesn't seem to work to convert directly on read https://docs.opencv.org/4.13.0/d8/d6a/group__imgcodecs__flags.html#gga61d9b0126a3e57d9277ac48327799c80a18afb429fb71972a327314b2f0d8d56a
-        image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
-        if image is None: 
-            continue
+    sample_toshow = random.randint(0, SONY_N_PLACES)
+    to_show = []
+
+    # TODO Adapt
+    # skip everything we don't plan to show in dry runs
+    if args.dry_run:
+        paths = sample_toshow
+
+    for path_i in range(SONY_N_PLACES):
+        n_illu = global_meta[f"Place{path_i}"]['NumOfLights']
+
+        full_img_ending = "12" if n_illu == 2 else "123"
+        path = datapath / f"Place{path_i}" / f"Place{path_i}_{full_img_ending}.png"
+
+        image = utils.read_image(path)
 
         print(f"working on: {path}")
 
-        filename = os.path.basename(path)
-
-        local_metapath = path.replace('.png', '_meta.json')
-        meta = extract_metadata(global_meta[filename.split('_')[0]], local_metapath)
+        local_metapath = str(path).replace('.png', '_meta.json')
+        meta = extract_metadata(global_meta[f"Place{path_i}"], local_metapath)
 
         if wb_algorithm == WBAlgorithm.ILLUMINANT3 and meta.n_illums < 3:
             print(f"skipping because n_illums: {meta.n_illums} < 3")
             continue
 
-        final = process_image(image, meta, wb_algorithm)
+        if wb_algorithm == WBAlgorithm.ILLU_MAP_MEAN or wb_algorithm == WBAlgorithm.ILLU_MAP_W_MEAN:
+            illuminant_map = illu_map(full_img=image, dir_path=datapath, place_i=path_i, meta=meta)
+        else:
+            illuminant_map = np.empty(0)
 
-        if path in sample_toshow:
+        final = process_image(image, meta, wb_algorithm, illuminant_map)
+
+        if path_i == sample_toshow:
             to_show.append(final)
 
-        newpath = path.replace(brand, save_loc)
+        newpath = Path(f"data/{save_loc}/{os.path.basename(path)}")
         print(newpath)
-        os.makedirs(newpath.replace(newpath.split(os.path.sep)[-1], ''), exist_ok=True)
         cv.imwrite(newpath, final)
 
     gamma = None if args.srgb else 0.4
     show_samples(to_show, title="white balanced samples", gamma=gamma)
 
-def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm):
+def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, illuminant_map: np.ndarray):
     # convert to RGB format
     image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
@@ -147,7 +146,7 @@ def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm):
     image /= MAX_UINT16
 
     print(f"running white balance solution: {wb_algorithm.name}")
-    image = white_balance(wb_algorithm, image, meta)
+    image = white_balance(wb_algorithm, image, meta, illuminant_map)
 
     # run conversion to camera-independent color space
     if args.ciexyz:

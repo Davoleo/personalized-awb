@@ -14,7 +14,7 @@ import numpy as np
 import skimage as ski
 
 from src import get_project_dir, Metadata
-from src.wbalance import gamma_correction, white_balance, WBAlgorithm, illu_map
+from src.wbalance import gamma_correction, compute_wb_variants, WBAlgorithm
 from src.ciexyz import convert_to_ciexyz
 import src.utils as utils
 
@@ -25,7 +25,8 @@ WB_ALGORITHMS = {
     'illuminant2': WBAlgorithm.ILLUMINANT2,
     'illuminant3': WBAlgorithm.ILLUMINANT3,
     'illu_map_mean': WBAlgorithm.ILLU_MAP_MEAN,
-    'illu_map_wmean': WBAlgorithm.ILLU_MAP_W_MEAN
+    'illu_map_wmean': WBAlgorithm.ILLU_MAP_W_MEAN,
+    'local_illu_blend': WBAlgorithm.LOCAL_ILLU_BLEND
 }
 
 MAX_UINT16 = 65535
@@ -120,12 +121,7 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
             print(f"skipping because n_illums: {meta.n_illums} < 3")
             continue
 
-        if wb_algorithm == WBAlgorithm.ILLU_MAP_MEAN or wb_algorithm == WBAlgorithm.ILLU_MAP_W_MEAN:
-            illuminant_map = illu_map(full_img=image, dir_path=datapath, place_i=path_i, meta=meta)
-        else:
-            illuminant_map = np.empty(0)
-
-        final = process_image(image, meta, wb_algorithm, illuminant_map)
+        final = process_image(image, meta, wb_algorithm, dir_path=datapath, place_i=path_i)
 
         if path_i == sample_toshow:
             to_show.append(final)
@@ -137,28 +133,41 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     gamma = None if args.srgb else 0.4
     show_samples(to_show, title="white balanced samples", gamma=gamma)
 
-def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, illuminant_map: np.ndarray):
+def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, dir_path: Path, place_i: int):
     # convert to RGB format
     image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-
     # Convert to float32 typing
     image = image.astype(np.float32)
     image /= MAX_UINT16
 
     print(f"running white balance solution: {wb_algorithm.name}")
-    image = white_balance(wb_algorithm, image, meta, illuminant_map)
+    variants = compute_wb_variants(wb_algorithm, image, meta, dir_path=dir_path, place_i=place_i)
 
-    # run conversion to camera-independent color space
-    if args.ciexyz:
-        print("converting to CIE XYZ color space...")
-        image = convert_to_ciexyz(image, meta)
+    # conversion to CIE XYZ should be done if enabled or forced if the algorithm is based on local wb blending
+    to_xyz = args.ciexyz or wb_algorithm == WBAlgorithm.LOCAL_ILLU_BLEND
 
-    if args.srgb:
-        print("converting to sRGB...")
-        image = ski.color.xyz2rgb(image)
+    accum = None
+    for variant in variants:
+        stage = variant.image
+        if to_xyz:
+            # if illuminant to compute cct from was not specified fallback to the first one
+            ref_idx = variant.cct_illuminant_index if variant.cct_illuminant_index is not None else 0
+            print("converting to CIE XYZ color space...")
+            # run conversion to camera-independent color space
+            stage = convert_to_ciexyz(stage, meta, illuminant_index=ref_idx)
+        weight = variant.weight
+        if not isinstance(weight, np.ndarray):
+            # fallback to full map to 1 [noop]
+            weight = np.full(stage.shape[:2], weight, dtype=np.float32)
+        term = weight[:,:,None]*stage
+        accum = term if accum is None else accum + term
+
+    image = accum
 
     # convert back to UINT16 and clip any value that goes over max
     if args.srgb:
+        print("converting to sRGB...")
+        image = ski.color.xyz2rgb(image)
         final = np.clip(image * MAX_UINT8, 0, MAX_UINT8).astype(np.uint8)
     else:
         final = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)

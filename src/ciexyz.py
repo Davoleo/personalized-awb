@@ -12,10 +12,10 @@ STANDARD_A_CCT = 2856
 D65_CCT = 6500
 
 
-def convert_to_ciexyz(img, meta: Metadata):
+def convert_to_ciexyz(img, meta: Metadata, illuminant_index = 0) -> np.ndarray:
     """Converts image colors to be device-independent"""
     warnings.filterwarnings("error")
-    cct = approximate_cct(meta)
+    cct = approximate_cct(meta, illuminant_index)
     warnings.filterwarnings("default")
     
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
@@ -30,7 +30,7 @@ def convert_to_ciexyz(img, meta: Metadata):
     return img
 
 
-def approximate_cct(meta: Metadata):
+def approximate_cct(meta: Metadata, illuminant_index: int = 0):
     xy: ArrayLike = [0.3127, 0.3290]
     cct_white = 6508
     i = 0
@@ -47,8 +47,7 @@ def approximate_cct(meta: Metadata):
         #print(cct)
         color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
-        # ? illuminants[0] is an assumption, should probably be adapted to the wb_algorithm
-        xyz = color_matrix_inv @ np.transpose(meta.illuminants[0])
+        xyz = color_matrix_inv @ np.transpose(meta.illuminants[illuminant_index])
         X, Y, Z = np.asarray(xyz).flatten()
         #print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]

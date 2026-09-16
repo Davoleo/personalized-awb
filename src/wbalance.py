@@ -33,7 +33,7 @@ class WBVariant:
     cct_illuminant_index: int | None
 
 
-def compute_wb_variants(algorithm: WBAlgorithm, img: np.ndarray, meta: Metadata, dir_path = None, place_i=None) -> list[WBVariant]:
+def compute_wb_variants(algorithm: WBAlgorithm, img: np.ndarray, meta: Metadata, dir_path, place_i) -> list[WBVariant]:
     match algorithm:
         case WBAlgorithm.WHITE_PATCH | WBAlgorithm.GREY_WORLD:
             coeffs = _global_coeffs(algorithm, img)
@@ -48,7 +48,7 @@ def compute_wb_variants(algorithm: WBAlgorithm, img: np.ndarray, meta: Metadata,
             # ? illuminant used in xyz conversion could be computed based on the weights instead of being hardcoded to 0
             return [WBVariant(img * coeffs, 1.0, 0)]
         case WBAlgorithm.LOCAL_ILLU_BLEND:
-            alphas = compute_alpha_map(img, dir_path, place_i, meta)
+            alphas = compute_alpha_map(img, dir_path, place_i, meta.n_illums)
             variants = []
             for i in range(meta.n_illums):
                 coeffs = _illuminant_coeffs(meta, i)
@@ -90,6 +90,7 @@ def _map_coeffs(algorithm: WBAlgorithm, illuminant_map: np.ndarray) -> np.ndarra
         # only keep third dimension [color channels]
         illu = illuminant_map.mean(axis=(0,1))
     elif algorithm == WBAlgorithm.ILLU_MAP_W_MEAN:
+        # ? not sure if it's the best weight ...
         weights = illuminant_map[:,:,1]
         illu = np.sum(illuminant_map * weights[:,:,None],axis=(1, 0)) / np.sum(weights)
     else:
@@ -106,15 +107,18 @@ def gamma_correction(image, gamma: float):
 
     return cv.LUT(image, lookup_table)
 
-def compute_alpha_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: Metadata):
+def compute_alpha_map(full_img: np.ndarray, dir_path: Path, place_i: int, n_illums: int):
     # convert from float to uint16
     full_img = (full_img*MAX_UINT16).astype(np.uint16)
+    # shouldn't be needed since we're only working with the green channel but just to be sure.
+    full_img = cv.cvtColor(full_img, cv.COLOR_RGB2BGR)
+
     img_l1: np.ndarray = utils.read_image(dir_path / f"Place{place_i}" / f"Place{place_i}_1.png")
 
-    if meta.n_illums == 2:
+    if n_illums == 2:
         diff = full_img.astype(np.int32) - img_l1.astype(np.int32)
         img_l2 = np.clip(diff, 0, MAX_UINT16).astype(np.uint16)
-        # use green channel as estimate for the scaling term [light intensity]
+        # use green channel as estimate for the scaling term [light intensity] - like paper
         g_l1 = img_l1[:, :, 1]
         g_l2 = img_l2[:, :, 1]
         # alpha = coefficient map
@@ -124,7 +128,7 @@ def compute_alpha_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: 
         alpha = np.clip(alpha, 0, 1)
         return [alpha, 1-alpha]
 
-    elif meta.n_illums == 3:
+    elif n_illums == 3:
         img_l12 = utils.read_image(dir_path / f"Place{place_i}" / f"Place{place_i}_12.png")
         diff_l2 = img_l12.astype(np.int32) - img_l1.astype(np.int32)
         img_l2 = np.clip(diff_l2, 0, MAX_UINT16).astype(np.uint16)
@@ -157,22 +161,24 @@ def illu_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: Metadata)
     l2 = meta.illuminants[1]
     l2 /= np.linalg.norm(l2)
 
+    alpha = compute_alpha_map(full_img, dir_path, place_i, meta.n_illums)
+
     if meta.n_illums == 2:
-        alpha = compute_alpha_map(full_img, dir_path, place_i, meta)
         # linear combination of coefficient map and the 2 illuminants.
         l12 = alpha[0][:,:,None] * l1 + alpha[1][:,:,None] * l2
-        l12 = l12[..., [2,1,0]]
+        # ! shouldn't be needed since illuminants are already in RGB order
+        #l12 = l12[..., [2,1,0]]
         return l12
 
     elif meta.n_illums == 3:
-        alpha = compute_alpha_map(full_img, dir_path, place_i, meta)
         # normalize l3
         l3 = meta.illuminants[2]
         l3 /= np.linalg.norm(l3)
 
         l123 = alpha[0][:,:,None] * l1 + alpha[1][:,:,None] * l2 + alpha[2][:,:,None] * l3
+        # ! shouldn't be needed since illuminants are already in RGB order
         # convert BGR -> RGB
-        l123 = l123[..., [2, 1, 0]]
+        #l123 = l123[..., [2, 1, 0]]
         return l123
     else:
         raise ValueError("metadata n_illums has has an invalid value")

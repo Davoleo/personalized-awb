@@ -40,7 +40,7 @@ parser.add_argument('--output', default=None, help="The output subfolder (in dat
 parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
 parser.add_argument('--ciexyz', action='store_true', default=False, help="Whether the software should perform CIE XYZ conversion or not (after WB)")
 parser.add_argument('--srgb', action='store_true', default=False, help="Whether the conversion to sRGB 8bit channels should be performed at the end")
-parser.add_argument('--dry-run', action='store_true', default=False, help="Whether the output should be saved to --output or just perform the operation and show the samples")
+#//parser.add_argument('--dry-run', action='store_true', default=False, help="Whether the output should be saved to --output or just perform the operation and show the samples")
 args = parser.parse_args()
 
 def get_device() -> str:
@@ -96,13 +96,14 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     with open(global_metapath, 'r') as f:
         global_meta = json.load(f)
 
+    # TODO improve to support multiple images like before
     sample_toshow = random.randint(0, SONY_N_PLACES)
     to_show = []
 
     # TODO Adapt
     # skip everything we don't plan to show in dry runs
-    if args.dry_run:
-        paths = sample_toshow
+    # if args.dry_run:
+    #     paths = sample_toshow
 
     for path_i in range(SONY_N_PLACES):
         n_illu = global_meta[f"Place{path_i}"]['NumOfLights']
@@ -162,7 +163,8 @@ def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, 
         term = weight[:,:,None]*stage
         accum = term if accum is None else accum + term
 
-    image = accum
+    if (accum is not None):
+        image = accum
 
     # convert back to UINT16 and clip any value that goes over max
     if args.srgb:

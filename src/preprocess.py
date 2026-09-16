@@ -8,10 +8,10 @@ import cv2 as cv
 
 import src.utils as utils
 
+# Extensions:
 # NEF : Nikon
 # ARW : Sony
 # DNG : Galaxy
-EXTENSIONS = ['nef', 'arw', 'dng']
 
 MAX_UINT16 = 65535
 
@@ -24,18 +24,26 @@ class NumpyEncoder(json.JSONEncoder):
             return o.tolist()
         return super().default(o)
 
-def resize(rgb, max_size):
-    """
-    Function to resize the image so that the short edge length == max_size
-    """
-    # take size information from the first 2 colunmns
-    h, w = rgb.shape[:2]
-    # scale is the multiplier needed for the short edge length to be = max_size
-    scale = max_size / min(h, w)
-    # multiply by scale -> round to integer -> clamp to 1
-    nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
-    # readiometric data -- inter_area -> no ringing/overshoot
-    return cv.resize(rgb, (nw, nh), interpolation=cv.INTER_AREA)
+def preprocess_metadata(meta):
+    """Preprocess metadata so that it's compatible with numpy arrays [parse strings]"""
+    meta1 = meta
+    meta1["ColorMatrix1"] = np.array(meta1["ColorMatrix1"].split(' '), dtype=float).reshape((3,3))
+    meta1["ColorMatrix2"] = np.array(meta1["ColorMatrix2"].split(' '), dtype=float).reshape((3,3))
+    meta1["ForwardMatrix1"] = np.array(meta1["ForwardMatrix1"].split(' '), dtype=float).reshape((3,3))
+    meta1["ForwardMatrix2"] = np.array(meta1["ForwardMatrix2"].split(' '), dtype=float).reshape((3,3))
+    meta1["CameraCalibration1"] = np.array(meta1["CameraCalibration1"].split(' '), dtype=float).reshape((3,3))
+    meta1["CameraCalibration2"] = np.array(meta1["CameraCalibration2"].split(' '), dtype=float).reshape((3,3))
+
+    meta1["AnalogBalance"] = np.array(meta1["AnalogBalance"].split(' '), dtype=float)
+    meta1["AsShotNeutral"] = np.array(meta1["AsShotNeutral"].split(' '), dtype=float)
+
+    meta1["CFARepeatPatternDim"] = tuple(int(string) for string in meta1["CFARepeatPatternDim"].split(' '))
+    meta1["CFAPattern2"] = np.array(meta1["CFAPattern2"].split(' '), dtype=int).reshape(meta1["CFARepeatPatternDim"])
+    meta1["CFAPlaneColor"] = np.array(meta1["CFAPlaneColor"].split(' '), dtype=int)
+
+    meta1["BlackLevelRepeatDim"] = tuple(int(string) for string in meta1["BlackLevelRepeatDim"].split(' '))
+    meta1["BlackLevel"] = np.array(meta1["BlackLevel"].split(' '), dtype=int).reshape(meta1["BlackLevelRepeatDim"])
+    return meta1
 
 def demosaic(image: np.ndarray):
     """
@@ -61,27 +69,6 @@ def demosaic(image: np.ndarray):
     np.stack([r, g, b], axis=2, out=demosaiced)
     return demosaiced
 
-def preprocess_metadata(meta):
-    """Preprocess metadata so that it's compatible with numpy arrays [parse strings]"""
-    meta1 = meta
-    meta1["ColorMatrix1"] = np.array(meta1["ColorMatrix1"].split(' '), dtype=float).reshape((3,3))
-    meta1["ColorMatrix2"] = np.array(meta1["ColorMatrix2"].split(' '), dtype=float).reshape((3,3))
-    meta1["ForwardMatrix1"] = np.array(meta1["ForwardMatrix1"].split(' '), dtype=float).reshape((3,3))
-    meta1["ForwardMatrix2"] = np.array(meta1["ForwardMatrix2"].split(' '), dtype=float).reshape((3,3))
-    meta1["CameraCalibration1"] = np.array(meta1["CameraCalibration1"].split(' '), dtype=float).reshape((3,3))
-    meta1["CameraCalibration2"] = np.array(meta1["CameraCalibration2"].split(' '), dtype=float).reshape((3,3))
-
-    meta1["AnalogBalance"] = np.array(meta1["AnalogBalance"].split(' '), dtype=float)
-    meta1["AsShotNeutral"] = np.array(meta1["AsShotNeutral"].split(' '), dtype=float)
-
-    meta1["CFARepeatPatternDim"] = tuple(int(string) for string in meta1["CFARepeatPatternDim"].split(' '))
-    meta1["CFAPattern2"] = np.array(meta1["CFAPattern2"].split(' '), dtype=int).reshape(meta1["CFARepeatPatternDim"])
-    meta1["CFAPlaneColor"] = np.array(meta1["CFAPlaneColor"].split(' '), dtype=int)
-
-    meta1["BlackLevelRepeatDim"] = tuple(int(string) for string in meta1["BlackLevelRepeatDim"].split(' '))
-    meta1["BlackLevel"] = np.array(meta1["BlackLevel"].split(' '), dtype=int).reshape(meta1["BlackLevelRepeatDim"])
-    return meta1
-
 def remove_black_white_level(image, meta, rmwb_per_channel):
     """
     Removes black and white level from the image according to JSON metadata
@@ -94,7 +81,7 @@ def remove_black_white_level(image, meta, rmwb_per_channel):
     if not rmwb_per_channel:
         black_level = black_level[0][0]
     else:
-        raise "rmwb_per_channel is not implemented yet"
+        raise NotImplementedError("rmwb_per_channel is not implemented yet")
 
     image = (image - black_level) / (white_level - black_level)
 
@@ -103,6 +90,19 @@ def remove_black_white_level(image, meta, rmwb_per_channel):
     image = np.clip(image, 0, 1)
 
     return image
+
+def resize(rgb, max_size):
+    """
+    Function to resize the image so that the short edge length == max_size
+    """
+    # take size information from the first 2 colunmns
+    h, w = rgb.shape[:2]
+    # scale is the multiplier needed for the short edge length to be = max_size
+    scale = max_size / min(h, w)
+    # multiply by scale -> round to integer -> clamp to 1
+    nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
+    # inter_area -> no ringing/overshoot
+    return cv.resize(rgb, (nw, nh), interpolation=cv.INTER_AREA)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -123,8 +123,8 @@ def main():
     for path in paths:
         print("now preprocessing: " + path)
         # load RAW TIFF
-        image = cv.imread(path, flags=cv.IMREAD_UNCHANGED)
-
+        image = utils.read_image(path)
+        
         # load METADATA JSON
         meta_path = path.replace('.tiff', '_meta.json')
         with (open(meta_path, 'r')) as file:
@@ -161,6 +161,7 @@ def main():
         with open(str(newpath).replace('.png', '_meta.json'), 'w') as f:
             json.dump(meta, f, cls=NumpyEncoder)
 
+#* old rawpy image decoding method 
 # def decode(path, demosaic_alg):
 #     """Decodes the RAW file format in the specified path"""
 #     with rawpy.imread(path) as raw:

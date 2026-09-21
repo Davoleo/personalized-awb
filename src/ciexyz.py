@@ -21,6 +21,8 @@ def convert_to_ciexyz(img, meta: Metadata, illuminant_index = 0) -> np.ndarray:
     forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
     row, col, _ = img.shape
 
+    #print("THE white: ", (forward_matrix @ np.ones(3)).tolist())
+
     # swap color channel flatten all dimensions except for colors
     img = img.transpose(2, 0, 1).reshape(3, row * col)
     img = forward_matrix @ img
@@ -52,6 +54,7 @@ def approximate_cct(meta: Metadata, illuminant_index: int = 0):
         #print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]
         if np.allclose(xy, xy_new, atol=1e-6):
+            #print("cct approximation returning: ", cct)
             return cct
         xy = xy_new
         i += 1
@@ -64,7 +67,10 @@ def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
     num = (1 / cct) - (1 / D65_CCT)
     den = (1 / STANDARD_A_CCT) - (1 / D65_CCT)
     g = num / den   # Ratio of interpolation
-    
+
+    # make sure g is between 0-1 [no extrapolation]
+    np.clip(g, 0, 1)
+
     # Interpolation of matrices
     CM = g*m1 + (1-g)*m2
     return CM

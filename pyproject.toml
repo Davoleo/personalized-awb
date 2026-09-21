@@ -13,8 +13,6 @@ dependencies = [
     "triton==3.5.1+rocm7.14.0a20260611",
     "opencv-python>=5.0.0.93",
     "colour-science>=0.4.7",
-    "scipy>=1.18.0",
-    "scikit-image>=0.26.0",
     "rawpy>=0.27.0",
 ]
 

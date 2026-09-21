@@ -17,3 +17,5 @@ data
 
 # external libraries, executables and code
 ext/
+
+AGENTS.md

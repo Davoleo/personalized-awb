@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import colour
 from numpy import ndarray
 import typing
 
@@ -11,7 +12,6 @@ import random
 import torch
 import cv2 as cv
 import numpy as np
-import skimage as ski
 
 from src import get_project_dir, Metadata
 from src.wbalance import gamma_correction, compute_wb_variants, WBAlgorithm
@@ -19,6 +19,7 @@ from src.ciexyz import convert_to_ciexyz
 import src.utils as utils
 
 WB_ALGORITHMS = {
+    'noop': WBAlgorithm.DISABLED,
     'white_patch': WBAlgorithm.WHITE_PATCH,
     'grey_world': WBAlgorithm.GREY_WORLD,
     'illuminant1': WBAlgorithm.ILLUMINANT1,
@@ -31,6 +32,8 @@ WB_ALGORITHMS = {
 
 MAX_UINT16 = 65535
 MAX_UINT8 = 255
+
+D50 = colour.CCS_ILLUMINANTS["CIE 1931 2 Degree Standard Observer"]["D50"]
 
 SONY_N_PLACES = 1317
 
@@ -71,18 +74,53 @@ def extract_metadata(global_meta_obj, local_meta) -> Metadata:
     with open(local_meta, 'r') as l_file:
         local_data = json.load(l_file)
 
-    n_illum = global_meta_obj["NumOfLights"]
-    illums = []
-    for i in range(1, n_illum+1):
-        illums.append(global_meta_obj[f"Light{i}"])
+    # LSMI
+    if global_meta_obj is not None:
+        n_illum = global_meta_obj["NumOfLights"]
+        illums = []
+        for i in range(1, n_illum+1):
+            illums.append(global_meta_obj[f"Light{i}"])
 
-    cm1 = np.array(local_data['ColorMatrix1'])
-    cm2 = np.array(local_data['ColorMatrix2'])
-    fm1 = np.array(local_data['ForwardMatrix1'])
-    fm2 = np.array(local_data['ForwardMatrix2'])
+        cm1 = np.array(local_data['ColorMatrix1'])
+        cm2 = np.array(local_data['ColorMatrix2'])
+        fm1 = np.array(local_data['ForwardMatrix1'])
+        fm2 = np.array(local_data['ForwardMatrix2'])
+    else: # gehler-shi
+        n_illum = 1
+        illums = [local_data['illuminant_color_raw']]
+        cm1 = np.array(local_data['cm1'])
+        cm2 = np.array(local_data['cm2'])
+        fm1 = np.array(local_data['fm1'])
+        fm2 = np.array(local_data['fm2'])
 
     return Metadata(n_illum, illums, cm1, cm2, fm1, fm2)
 
+
+def pipeline_gehler_shi(save_loc: str, wb_algorithm: WBAlgorithm):
+    datapath = os.path.join('data','Gehler-Shi')
+
+    if wb_algorithm in [WBAlgorithm.ILLUMINANT2, WBAlgorithm.ILLUMINANT3, WBAlgorithm.ILLU_MAP_MEAN, WBAlgorithm.ILLU_MAP_W_MEAN, WBAlgorithm.LOCAL_ILLU_BLEND]:
+        raise ValueError(f"WBAlgorithm {wb_algorithm.name}: is not compatible with Gehler-Shi [which only supports 1 illuminant]")
+
+    paths = [
+        os.path.join(root, f)
+        for root, _, files in os.walk(datapath)
+        for f in files if f.lower().endswith('.png')
+    ]
+
+    for path in paths:
+        print("working on " + path)
+
+        local_metapath = path.replace('.png', '_metadata.json')
+
+        print("extracting local_meta...")
+        meta = extract_metadata(None, local_metapath)
+
+        image = utils.read_image(path)
+        final = process_image(image, meta, wb_algorithm, Path(path), place_i=1)
+
+        newpath = Path(os.path.join("data", save_loc, os.path.basename(path)))
+        cv.imwrite(newpath, final)
 
 def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     """
@@ -99,11 +137,6 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
     # TODO improve to support multiple images like before
     sample_toshow = random.randint(0, SONY_N_PLACES)
     to_show = []
-
-    # TODO Adapt
-    # skip everything we don't plan to show in dry runs
-    # if args.dry_run:
-    #     paths = sample_toshow
 
     for path_i in range(SONY_N_PLACES):
         n_illu = global_meta[f"Place{path_i}"]['NumOfLights']
@@ -127,7 +160,7 @@ def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
         if path_i == sample_toshow:
             to_show.append(final)
 
-        newpath = Path(f"data/{save_loc}/{os.path.basename(path)}")
+        newpath = Path(os.path.join("data", save_loc, os.path.basename(path)))
         print(newpath)
         cv.imwrite(newpath, final)
 
@@ -163,13 +196,14 @@ def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, 
         term = weight[:,:,None]*stage
         accum = term if accum is None else accum + term
 
-    if (accum is not None):
+    if accum is not None:
         image = accum
 
     # convert back to UINT16 and clip any value that goes over max
     if args.srgb:
         print("converting to sRGB...")
-        image = ski.color.xyz2rgb(image)
+        image = colour.XYZ_to_sRGB(image, illuminant=D50, chromatic_adaptation_transform="Bradford", apply_cctf_encoding=False)
+        image = colour.models.eotf_inverse_sRGB(np.clip(image, 0, 1))
         final = np.clip(image * MAX_UINT8, 0, MAX_UINT8).astype(np.uint8)
     else:
         final = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
@@ -186,8 +220,11 @@ def main():
 
     if algorithm is None:
         raise ValueError(f"--algorithm should be set to one of the following values: {str.join('|', WB_ALGORITHMS.keys())}")
-    
-    pipeline(datapath=proj_dir.joinpath('data', args.input), save_loc=args.output if args.output is not None else args.wbalgorithm, wb_algorithm=algorithm)
+
+    if args.input == "Gehler-Shi":
+        pipeline_gehler_shi(save_loc=args.output if args.output is not None else args.wbalgorithm, wb_algorithm=WB_ALGORITHMS[args.wbalgorithm])
+    else:
+        pipeline(datapath=proj_dir.joinpath('data', args.input), save_loc=args.output if args.output is not None else args.wbalgorithm, wb_algorithm=algorithm)
 
 
 def hello_cv():

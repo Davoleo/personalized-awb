@@ -1,3 +1,5 @@
+from argparse import ArgumentError
+from typing import Literal
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -12,6 +14,7 @@ MAX_UINT16 = 65535
 COORDS_RATIO = 0.179
 
 class WBAlgorithm(Enum):
+    DISABLED = 0
     ILLUMINANT1 = 1
     ILLUMINANT2 = 2
     ILLUMINANT3 = 3
@@ -35,57 +38,60 @@ class WBVariant:
 
 def compute_wb_variants(algorithm: WBAlgorithm, img: np.ndarray, meta: Metadata, dir_path, place_i) -> list[WBVariant]:
     match algorithm:
+        case WBAlgorithm.DISABLED:
+            return [WBVariant(img, 1.0, None)]
         case WBAlgorithm.WHITE_PATCH | WBAlgorithm.GREY_WORLD:
-            coeffs = _global_coeffs(algorithm, img)
-            return [WBVariant(img * coeffs, 1.0, None)]
+            gain = _global_gain(algorithm, img)
+            return [WBVariant(img * gain, 1.0, None)]
         case WBAlgorithm.ILLUMINANT1 | WBAlgorithm.ILLUMINANT2 | WBAlgorithm.ILLUMINANT3:
             idx = algorithm.value - 1
-            coeffs = _illuminant_coeffs(meta, idx)
-            return [WBVariant(img * coeffs, 1.0, idx)]
+            gain = _illuminant_gain(meta, idx)
+            return [WBVariant(img * gain, 1.0, idx)]
         case WBAlgorithm.ILLU_MAP_MEAN | WBAlgorithm.ILLU_MAP_W_MEAN:
             illu = illu_map(img, dir_path, place_i, meta)
-            coeffs = _map_coeffs(algorithm, illu)
+            gain = _map_gain(algorithm, illu)
             # ? illuminant used in xyz conversion could be computed based on the weights instead of being hardcoded to 0
-            return [WBVariant(img * coeffs, 1.0, 0)]
+            return [WBVariant(img * gain, 1.0, 0)]
         case WBAlgorithm.LOCAL_ILLU_BLEND:
             alphas = compute_alpha_map(img, dir_path, place_i, meta.n_illums)
             variants = []
             for i in range(meta.n_illums):
-                coeffs = _illuminant_coeffs(meta, i)
-                variants.append(WBVariant(img * coeffs, alphas[i], i))
+                gain = _illuminant_gain(meta, i)
+                variants.append(WBVariant(img * gain, alphas[i], i))
             return variants
         case _:
             raise NotImplementedError(f"unhandled White Balancing Algorithm: {algorithm}")
 
-def _global_coeffs(algorithm: WBAlgorithm, img: np.ndarray) -> np.ndarray:
+def _global_gain(algorithm: WBAlgorithm, img: np.ndarray) -> np.ndarray:
     if algorithm == WBAlgorithm.WHITE_PATCH:
         # max: reducing the first 2 dimensions (keep channels, as per openCV shape)
         image_max = np.amax(img, (0,1))
         #print("image maxes: ", image_max)
-        # L2 Norm to normalize illuminant vector
-        image_max /= np.linalg.norm(image_max)
+        image_max = _illu_norm(image_max, 'euclidean')
         #print("norm image maxes: ", image_max)
-        # White Patch coeffs
-        return 1.0 / image_max
+        # White Patch gain
+        return np.ones(3) / image_max
     elif algorithm == WBAlgorithm.GREY_WORLD:
         # mean: reducing the first 2 dimensions (keep channels, as per openCV shape)
         image_mean = np.mean(img, axis=(0,1))
         #print("image means: ", image_mean)
-        image_mean /= np.linalg.norm(image_mean)
+        image_mean = _illu_norm(image_mean, 'euclidean')
         #print("image means norm: ", image_mean)
-        # Grey World coeffs
-        return 0.5 / image_mean
+        # Grey World gain
+        return np.full(3, 0.5) / image_mean
     else:
         raise ValueError(f"{algorithm} is not a global-coefficient algorithm")
 
-def _illuminant_coeffs(meta: Metadata, idx: int) -> np.ndarray:
+def _illuminant_gain(meta: Metadata, idx: int) -> np.ndarray:
     if idx >= meta.n_illums:
         raise ValueError(f"illuminant index {idx} doesn't exist on this image (n_illuminants={meta.n_illums})")
-    illu = np.asarray(meta.illuminants[idx], dtype=np.float64)
-    illu /= np.linalg.norm(illu)
-    return np.ones(3) / illu
+    illu = np.array(meta.illuminants[idx], dtype=np.float64)
+    illu = _illu_norm(illu, 'green_based')
+    gain = np.ones(3) / illu
+    print("gain:", gain, "ratio to G:", gain / gain[1])
+    return gain
 
-def _map_coeffs(algorithm: WBAlgorithm, illuminant_map: np.ndarray) -> np.ndarray:
+def _map_gain(algorithm: WBAlgorithm, illuminant_map: np.ndarray) -> np.ndarray:
     if algorithm == WBAlgorithm.ILLU_MAP_MEAN:
         # only keep third dimension [color channels]
         illu = illuminant_map.mean(axis=(0,1))
@@ -96,9 +102,18 @@ def _map_coeffs(algorithm: WBAlgorithm, illuminant_map: np.ndarray) -> np.ndarra
     else:
         raise ValueError(f"{algorithm} is not a map-coefficient algorithm")
 
-    illu /= np.linalg.norm(illu)
-    return np.ones(3) / illu
+    gain = np.ones(3) / _illu_norm(illu, 'green_based')
+    print("gain:", gain, "ratio to G:", gain / gain[1])
+    return gain
 
+def _illu_norm(arr: np.ndarray, norm: Literal['euclidean', 'green_based']):
+    if len(arr) != 3:
+        raise ValueError("Argument passed to _illu_norm is not an illuminant!")
+    match norm:
+        case 'euclidean':
+            return arr / np.linalg.norm(arr)
+        case 'green_based':
+            return arr / arr[1]
 
 def gamma_correction(image, gamma: float):
     lookup_table = np.empty((1, MAX_UINT16+1), np.uint16)
@@ -166,8 +181,6 @@ def illu_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: Metadata)
     if meta.n_illums == 2:
         # linear combination of coefficient map and the 2 illuminants.
         l12 = alpha[0][:,:,None] * l1 + alpha[1][:,:,None] * l2
-        # ! shouldn't be needed since illuminants are already in RGB order
-        #l12 = l12[..., [2,1,0]]
         return l12
 
     elif meta.n_illums == 3:
@@ -176,9 +189,6 @@ def illu_map(full_img: np.ndarray, dir_path: Path, place_i: int, meta: Metadata)
         l3 /= np.linalg.norm(l3)
 
         l123 = alpha[0][:,:,None] * l1 + alpha[1][:,:,None] * l2 + alpha[2][:,:,None] * l3
-        # ! shouldn't be needed since illuminants are already in RGB order
-        # convert BGR -> RGB
-        #l123 = l123[..., [2, 1, 0]]
         return l123
     else:
         raise ValueError("metadata n_illums has has an invalid value")

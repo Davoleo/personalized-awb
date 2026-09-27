@@ -45,6 +45,14 @@ def preprocess_metadata(meta):
     meta1["BlackLevel"] = np.array(meta1["BlackLevel"].split(' '), dtype=int).reshape(meta1["BlackLevelRepeatDim"])
     return meta1
 
+def crop_valid_area(image: np.ndarray, meta) -> np.ndarray:
+    origin = meta['DefaultCropOrigin']
+    size = meta['DefaultCropSize']
+    end = (origin[0]+size[0], origin[1]+size[1])
+
+    cropped = image[origin[1]:end[1], origin[0]:end[0]]
+    return cropped
+
 def demosaic(image: np.ndarray):
     """
     Demosaic the input image with a naive algorithm, dividing total size by 2.

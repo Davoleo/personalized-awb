@@ -12,7 +12,7 @@ class Metadata:
     """dataset metadata"""
     n_illums: int
     illuminants: list[np.typing.ArrayLike]
-    color_matrix_1: np.typing.ArrayLike
-    color_matrix_2: np.typing.ArrayLike
-    forward_matrix_1: np.typing.ArrayLike
-    forward_matrix_2: np.typing.ArrayLike
+    color_matrix_1: np.ndarray
+    color_matrix_2: np.ndarray
+    forward_matrix_1: np.ndarray
+    forward_matrix_2: np.ndarray

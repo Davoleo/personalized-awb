@@ -1,3 +1,4 @@
+from numpy.core.multiarray import dtype
 from sympy.physics.units import Wb
 from dataclasses import dataclass
 from enum import Enum
@@ -41,10 +42,16 @@ class IlluminantEstimate:
         if self.alpha is None or self.valid is None:
             raise ValueError("alpha and valid maps must not be null for local illuminant estimates")
 
+        h,w = self.alpha.shape[:2]
+        imap = np.zeros((h,w,3), dtype=np.float32)
         # alpha coefficient map -> illuminant map
-        imap = self.alpha @ self.colors # depth K => 3 | with K being the number of alphas
-        imap[~self.valid] = 1.0         # unresolved pixels => don't correct
+        for k, color in enumerate(self.colors):
+            imap += self.alpha[..., k:k + 1] * color  # depth K => 3 | with K being the number of alphas
         return imap
+
+    def __post_init__(self):
+        if self.alpha is not None and (self.alpha.ndim != 3 or self.alpha.shape[2] != len(self.colors)):
+            raise ValueError(f"alpha must be (H,W, K={len(self.colors)}), got {self.alpha.shape}")
 
 def gains(illuminant: np.ndarray) -> np.ndarray:
     """Per-channel gains to neutralise the illuminant, works both for global and local illuminants"""
@@ -113,7 +120,7 @@ def compute_alpha_map(dir_path: Path, place_i: int, n_illums: int):
     if n_illums == 3:
         illu_variants.append(np.clip(_read_g(suf="13") - g1, 0, None))
 
-    greens = np.stack(illu_variants, axis=1)
+    greens = np.stack(illu_variants, axis=-1)
     denom = greens.sum(axis=-1)
     valid = denom > 0
     alpha = greens / np.maximum(denom, 1e-6)[..., None]

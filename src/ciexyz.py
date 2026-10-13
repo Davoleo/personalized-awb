@@ -1,4 +1,3 @@
-import os
 import warnings
 
 import colour
@@ -6,33 +5,35 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 import src.utils as utils
-from src import get_project_dir, Metadata
+from src import Metadata, get_project_dir
 
 STANDARD_A_CCT = 2856
 D65_CCT = 6500
 
 
-def convert_to_ciexyz(img, meta: Metadata, illuminant_index = 0) -> np.ndarray:
+def convert_to_ciexyz(img, meta: Metadata, illuminant: np.ndarray) -> np.ndarray:
     """Converts image colors to be device-independent"""
-    warnings.filterwarnings("error")
-    cct = approximate_cct(meta, illuminant_index)
-    warnings.filterwarnings("default")
     
-    forward_matrix = interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
+    fm = forward_matrix_for(meta, illuminant)
     row, col, _ = img.shape
-
-    #print("THE white: ", (forward_matrix @ np.ones(3)).tolist())
 
     # swap color channel flatten all dimensions except for colors
     img = img.transpose(2, 0, 1).reshape(3, row * col)
-    img = forward_matrix @ img
+    img = fm @ img
     # recompose image
     img = img.reshape(3, row, col).transpose(1, 2, 0)
-
     return img
 
 
-def approximate_cct(meta: Metadata, illuminant_index: int = 0):
+def forward_matrix_for(meta: Metadata, illuminant: np.ndarray) -> np.ndarray:
+    warnings.filterwarnings("error")
+    cct = approximate_cct(meta, illuminant)
+    warnings.resetwarnings()
+    return interpolate_ccm(cct, m1=meta.forward_matrix_1, m2=meta.forward_matrix_2)
+
+def approximate_cct(meta: Metadata, illuminant: np.ndarray):
+    """illuminant: camera-neutral RGB of the light"""
+    illuminant = np.asarray(illuminant, dtype=np.float64)
     xy: ArrayLike = [0.3127, 0.3290]
     cct_white = 6508
     i = 0
@@ -49,12 +50,12 @@ def approximate_cct(meta: Metadata, illuminant_index: int = 0):
         #print(cct)
         color_matrix = interpolate_ccm(cct, meta.color_matrix_1, meta.color_matrix_2)
         color_matrix_inv = np.linalg.inv(color_matrix)
-        xyz = color_matrix_inv @ np.transpose(meta.illuminants[illuminant_index])
+        xyz = color_matrix_inv @ illuminant
         X, Y, Z = np.asarray(xyz).flatten()
         #print("X Y Z: ", X, Y, Z)
         xy_new = [X / (X+Y+Z), Y / (X+Y+Z)]
         if np.allclose(xy, xy_new, atol=1e-6):
-            #print("cct approximation returning: ", cct)
+            print("cct approximation returning: ", cct)
             return cct
         xy = xy_new
         i += 1
@@ -62,7 +63,7 @@ def approximate_cct(meta: Metadata, illuminant_index: int = 0):
     print("WARN: CCT approximation did not converge -> returning base cct value")
     return cct_white
 
-def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
+def interpolate_ccm(cct, m1: np.ndarray, m2: np.ndarray) -> np.ndarray:
     """cct is the interpolator temperature value"""
     num = (1 / cct) - (1 / D65_CCT)
     den = (1 / STANDARD_A_CCT) - (1 / D65_CCT)
@@ -78,4 +79,3 @@ def interpolate_ccm(cct, m1: ArrayLike, m2: ArrayLike) -> np.ndarray:
 if __name__ == '__main__':
     image_path = get_project_dir() / 'data' / 'Gehler-Shi' / 'IMG_0596_sensorname_Canon5D.png'
     image = utils.read_image(image_path)
-    converted = convert_to_ciexyz(image, os.path.basename(image_path))

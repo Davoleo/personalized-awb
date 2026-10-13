@@ -1,10 +1,11 @@
-import os
 import argparse
 import json
+import os
 from pathlib import Path
+from typing import LiteralString
 
-import numpy as np
 import cv2 as cv
+import numpy as np
 
 import src.utils as utils
 
@@ -24,7 +25,7 @@ class NumpyEncoder(json.JSONEncoder):
             return o.tolist()
         return super().default(o)
 
-def preprocess_metadata(meta):
+def preprocess_metadata(meta, big_maps):
     """Preprocess metadata so that it's compatible with numpy arrays [parse strings]"""
     meta1 = meta
     meta1["ColorMatrix1"] = np.array(meta1["ColorMatrix1"].split(' '), dtype=float).reshape((3,3))
@@ -43,6 +44,16 @@ def preprocess_metadata(meta):
 
     meta1["BlackLevelRepeatDim"] = tuple(int(string) for string in meta1["BlackLevelRepeatDim"].split(' '))
     meta1["BlackLevel"] = np.array(meta1["BlackLevel"].split(' '), dtype=int).reshape(meta1["BlackLevelRepeatDim"])
+
+    meta1["ProfileHueSatMapDims"] = tuple(int(string) for string in meta1["ProfileHueSatMapDims"].split(' '))
+    meta1["ProfileLookTableDims"] = tuple(int(string) for string in meta1["ProfileLookTableDims"].split(' '))
+
+    meta1["DefaultScale"] = tuple(int(string) for string in meta1["DefaultScale"].split(' '))
+    meta1["DefaultCropOrigin"] = tuple(int(string) for string in meta1["DefaultCropOrigin"].split(' '))
+    meta1["DefaultCropSize"] = tuple(int(string) for string in meta1["DefaultCropSize"].split(' '))
+
+    meta1["ActiveArea"] = tuple(int(string) for string in meta1["ActiveArea"].split(' '))
+    meta1["NoiseProfile"] = np.array(meta1["NoiseProfile"].split(' '), dtype=float)
     return meta1
 
 def crop_valid_area(image: np.ndarray, meta) -> np.ndarray:
@@ -99,7 +110,7 @@ def remove_black_white_level(image, meta, rmwb_per_channel):
 
     return image
 
-def resize(rgb, max_size):
+def resize(rgb: np.ndarray, max_size) -> np.ndarray:
     """
     Function to resize the image so that the short edge length == max_size
     """
@@ -110,7 +121,7 @@ def resize(rgb, max_size):
     # multiply by scale -> round to integer -> clamp to 1
     nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
     # inter_area -> no ringing/overshoot
-    return cv.resize(rgb, (nw, nh), interpolation=cv.INTER_AREA)
+    return cv.resize(rgb, (nw, nh))
 
 def main():
     ap = argparse.ArgumentParser()
@@ -128,8 +139,9 @@ def main():
         for f in files if f.lower().endswith('.tiff')
     ]
 
+    path: LiteralString | str
     for path in paths:
-        print("now preprocessing: " + path)
+        print("now preprocessing: ", path)
         # load RAW TIFF
         image = utils.read_image(path)
         
@@ -138,8 +150,14 @@ def main():
         with (open(meta_path, 'r')) as file:
             meta = json.load(file)[0]
 
+        # maps_path = path.replace('.tiff', '_maps.json')
+        # with (open(maps_path, 'r')) as file:
+        #     big_maps = json.load(file)[0]
+
         print("preprocessing metadata...")
-        meta = preprocess_metadata(meta)
+        meta = preprocess_metadata(meta, None)
+
+        image = crop_valid_area(image, meta)
 
         print("demosaicing image...")
         image = demosaic(image)
@@ -168,6 +186,8 @@ def main():
         print("rewriting metadata...")
         with open(str(newpath).replace('.png', '_meta.json'), 'w') as f:
             json.dump(meta, f, cls=NumpyEncoder)
+
+        exit(0)
 
 #* old rawpy image decoding method 
 # def decode(path, demosaic_alg):

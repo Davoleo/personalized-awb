@@ -1,22 +1,22 @@
-import json
+import argparse
+import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import colour
-from numpy import ndarray
-import typing
-
-import argparse
-import os
-import random
-
-import torch
 import cv2 as cv
 import numpy as np
+import torch
 
-from src import get_project_dir, Metadata
-from src.wbalance import gamma_correction, compute_wb_variants, WBAlgorithm
-from src.ciexyz import convert_to_ciexyz
 import src.utils as utils
+from src import get_project_dir
+from src.config import RenderConfig
+from src.datasets import Sample
+from src.datasets import iter_gehler_shi, iter_lsmi
+from src.output import finalize, show_samples
+from src.render_manual import render_manual
+from src.render_rawpy import render_rawpy
+from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant
 
 WB_ALGORITHMS = {
     'noop': WBAlgorithm.DISABLED,
@@ -27,204 +27,97 @@ WB_ALGORITHMS = {
     'illuminant3': WBAlgorithm.ILLUMINANT3,
     'illu_map_mean': WBAlgorithm.ILLU_MAP_MEAN,
     'illu_map_wmean': WBAlgorithm.ILLU_MAP_W_MEAN,
-    'local_illu_blend': WBAlgorithm.LOCAL_ILLU_BLEND
+    'local_illu': WBAlgorithm.LOCAL_ILLU
 }
 
 MAX_UINT16 = 65535
 MAX_UINT8 = 255
 
 D50 = colour.CCS_ILLUMINANTS["CIE 1931 2 Degree Standard Observer"]["D50"]
-
 SONY_N_PLACES = 1317
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
-parser.add_argument('--output', default=None, help="The output subfolder (in data/)")
-parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
-parser.add_argument('--ciexyz', action='store_true', default=False, help="Whether the software should perform CIE XYZ conversion or not (after WB)")
-parser.add_argument('--srgb', action='store_true', default=False, help="Whether the conversion to sRGB 8bit channels should be performed at the end")
-#//parser.add_argument('--dry-run', action='store_true', default=False, help="Whether the output should be saved to --output or just perform the operation and show the samples")
-args = parser.parse_args()
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', default="Gehler-Shi", help="The dataset path (in the data folder) to use as input data to enhance")
+    parser.add_argument('--output', default=None, help="The output subfolder (in data/)")
+    parser.add_argument('--wbalgorithm', required=True, choices=list(WB_ALGORITHMS), help="The White Balancing Algorithm to be used to enhance the dataset")
+    parser.add_argument('--backend', required=True, choices=['manual', 'rawpy'], default='manual', help="Pipeline backend to convert to sRGB")
+    parser.add_argument('--space', choices=['raw', 'xyz', 'srgb'], default=None, help="Output colour space (manual backend, default raw). The rawpy backend always outputs sRGB.")
+    parser.add_argument('--local-mode', choices=['blend', 'mix'], default=None, help="How local illuminants are combined (manual default: blend; rawpy: mix)")
+    parser.add_argument('--raw-input', default="sony_superraw", help="RAW files directory [needed by rawpy backend]")
+    parser.add_argument('--limit', type=int, default=None, help="Process only the first N samples")
+    parser.add_argument('--show', type=int, default=0, metavar='N', help="Show the first N outputs at the end")
+    parser.add_argument('--dry-run', action='store_true', default=False, help="Don't write anything")
+    return parser
 
 def get_device() -> str:
     device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else 'cpu'  # type: ignore
     print(f"Accelerator: {device}")
     return device
 
-def show_samples(images: list[str] | list[np.ndarray], title: str = "images", cols: int = 4, gamma = None):
-    first = images[0]
-    if isinstance(first, str):
-        images = typing.cast(list[str], images)
-        loaded = [cv.imread(p, cv.IMREAD_UNCHANGED) for p in images]
-    else:
-        loaded = images
 
-    loaded = typing.cast(list[ndarray], loaded)
+# noinspection D
+def run(samples: Iterator[Sample], algorithm: WBAlgorithm, cfg: RenderConfig, out_dir: Path, args):
+    need = required_illums(algorithm)
+    shown, done = [], 0
 
-    n = len(loaded)
-    rows = (n + cols - 1) // cols
-    row_panels = [np.concatenate(loaded[r * cols : (r + 1) * cols], axis=1) for r in range(rows)]
-    full = np.concatenate(row_panels, axis=0)
-    if gamma is not None:
-        full = gamma_correction(full, gamma)
-    cv.imshow(title, full)
-    cv.waitKey(0)
-
-def extract_metadata(global_meta_obj, local_meta) -> Metadata:
-    with open(local_meta, 'r') as l_file:
-        local_data = json.load(l_file)
-
-    # LSMI
-    if global_meta_obj is not None:
-        n_illum = global_meta_obj["NumOfLights"]
-        illums = []
-        for i in range(1, n_illum+1):
-            illums.append(global_meta_obj[f"Light{i}"])
-
-        cm1 = np.array(local_data['ColorMatrix1'])
-        cm2 = np.array(local_data['ColorMatrix2'])
-        fm1 = np.array(local_data['ForwardMatrix1'])
-        fm2 = np.array(local_data['ForwardMatrix2'])
-    else: # gehler-shi
-        n_illum = 1
-        illums = [local_data['illuminant_color_raw']]
-        cm1 = np.array(local_data['cm1'])
-        cm2 = np.array(local_data['cm2'])
-        fm1 = np.array(local_data['fm1'])
-        fm2 = np.array(local_data['fm2'])
-
-    return Metadata(n_illum, illums, cm1, cm2, fm1, fm2)
-
-
-def pipeline_gehler_shi(save_loc: str, wb_algorithm: WBAlgorithm):
-    datapath = os.path.join('data','Gehler-Shi')
-
-    if wb_algorithm in [WBAlgorithm.ILLUMINANT2, WBAlgorithm.ILLUMINANT3, WBAlgorithm.ILLU_MAP_MEAN, WBAlgorithm.ILLU_MAP_W_MEAN, WBAlgorithm.LOCAL_ILLU_BLEND]:
-        raise ValueError(f"WBAlgorithm {wb_algorithm.name}: is not compatible with Gehler-Shi [which only supports 1 illuminant]")
-
-    paths = [
-        os.path.join(root, f)
-        for root, _, files in os.walk(datapath)
-        for f in files if f.lower().endswith('.png')
-    ]
-
-    for path in paths:
-        print("working on " + path)
-
-        local_metapath = path.replace('.png', '_metadata.json')
-
-        print("extracting local_meta...")
-        meta = extract_metadata(None, local_metapath)
-
-        image = utils.read_image(path)
-        final = process_image(image, meta, wb_algorithm, Path(path), place_i=1)
-
-        newpath = Path(os.path.join("data", save_loc, os.path.basename(path)))
-        cv.imwrite(newpath, final)
-
-def pipeline(datapath: Path, save_loc: str, wb_algorithm: WBAlgorithm):
-    """
-    Enhance image files in @datapath with @transforms and write them to the @save_loc folders
-    """
-
-    # build  data/{brand}/{brand}_meta.json.
-    brand = datapath.parts[-1]
-    global_metapath = datapath / f"{brand}_meta.json"
-
-    with open(global_metapath, 'r') as f:
-        global_meta = json.load(f)
-
-    # TODO improve to support multiple images like before
-    sample_toshow = random.randint(0, SONY_N_PLACES)
-    to_show = []
-
-    for path_i in range(SONY_N_PLACES):
-        n_illu = global_meta[f"Place{path_i}"]['NumOfLights']
-
-        full_img_ending = "12" if n_illu == 2 else "123"
-        path = datapath / f"Place{path_i}" / f"Place{path_i}_{full_img_ending}.png"
-
-        image = utils.read_image(path)
-
-        print(f"working on: {path}")
-
-        local_metapath = str(path).replace('.png', '_meta.json')
-        meta = extract_metadata(global_meta[f"Place{path_i}"], local_metapath)
-
-        if wb_algorithm == WBAlgorithm.ILLUMINANT3 and meta.n_illums < 3:
-            print(f"skipping because n_illums: {meta.n_illums} < 3")
+    for sample in samples:
+        if args.limit is not None and done >= args.limit:
+            break
+        if sample.meta.n_illums < need:
+            print(f"skipping {sample.name}: n_illums {sample.meta.n_illums} < {need}")
+            continue
+        if cfg.backend == "rawpy" and (sample.raw_path is None or not sample.raw_path.exists()):
+            print(f"skipping {sample.name}: raw_path does not exist ({sample.raw_path})")
             continue
 
-        final = process_image(image, meta, wb_algorithm, dir_path=datapath, place_i=path_i)
+        png = utils.load_linear_rgb(sample.png_path)
+        est = estimate_illuminant(algorithm, png, sample.meta, sample.dir_path, sample.place_i)
 
-        if path_i == sample_toshow:
-            to_show.append(final)
+        if cfg.backend == "rawpy":
+            final = render_rawpy(sample.raw_path, est)
+        else:
+            final = finalize(render_manual(png, est, sample.meta, cfg), cfg)
 
-        newpath = Path(os.path.join("data", save_loc, os.path.basename(path)))
-        print(newpath)
-        cv.imwrite(newpath, final)
+        print(f"done: {sample.name}")
+        done += 1
 
-    gamma = None if args.srgb else 0.4
-    show_samples(to_show, title="white balanced samples", gamma=gamma)
+        if len(shown) < args.show:
+            shown.append(final)
+        if not args.dry_run:
+            cv.imwrite(str(out_dir / sample.name), final)
 
-def process_image(image: np.ndarray, meta: Metadata, wb_algorithm: WBAlgorithm, dir_path: Path, place_i: int):
-    # convert to RGB format
-    image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-    # Convert to float32 typing
-    image = image.astype(np.float32)
-    image /= MAX_UINT16
+    if shown:
+        show_samples(shown, title="white balanced samples", gamma=None if cfg.space == 'srgb' else 0.4)
 
-    print(f"running white balance solution: {wb_algorithm.name}")
-    variants = compute_wb_variants(wb_algorithm, image, meta, dir_path=dir_path, place_i=place_i)
+def main():
 
-    # conversion to CIE XYZ should be done if enabled or forced if the algorithm is based on local wb blending
-    to_xyz = args.ciexyz or wb_algorithm == WBAlgorithm.LOCAL_ILLU_BLEND
+    parser = build_parser()
+    args = parser.parse_args()
 
-    accum = None
-    for variant in variants:
-        stage = variant.image
-        if to_xyz:
-            # if illuminant to compute cct from was not specified fallback to the first one
-            ref_idx = variant.cct_illuminant_index if variant.cct_illuminant_index is not None else 0
-            print("converting to CIE XYZ color space...")
-            # run conversion to camera-independent color space
-            stage = convert_to_ciexyz(stage, meta, illuminant_index=ref_idx)
-        weight = variant.weight
-        if not isinstance(weight, np.ndarray):
-            # fallback to full map to 1 [noop]
-            weight = np.full(stage.shape[:2], weight, dtype=np.float32)
-        term = weight[:,:,None]*stage
-        accum = term if accum is None else accum + term
+    try:
+        cfg = RenderConfig.from_args(args)
+    except ValueError as e:
+        parser.error(str(e))
 
-    if accum is not None:
-        image = accum
-
-    # convert back to UINT16 and clip any value that goes over max
-    if args.srgb:
-        print("converting to sRGB...")
-        image = colour.XYZ_to_sRGB(image, illuminant=D50, chromatic_adaptation_transform="Bradford", apply_cctf_encoding=False)
-        image = colour.models.eotf_inverse_sRGB(np.clip(image, 0, 1))
-        final = np.clip(image * MAX_UINT8, 0, MAX_UINT8).astype(np.uint8)
-    else:
-        final = np.clip(image * MAX_UINT16, 0, MAX_UINT16).astype(np.uint16)
-
-    final = cv.cvtColor(final, cv.COLOR_RGB2BGR)
-    return final
-
-def main():   
     get_device()
-    proj_dir = get_project_dir()
-    # by default numpy prints with 8 precision
-    #np.set_printoptions(precision=17)
     algorithm = WB_ALGORITHMS[args.wbalgorithm]
+    proj_dir = get_project_dir()
+    datapath = proj_dir / 'data' / args.input
+    gehler = args.input == "Gehler-Shi"
 
-    if algorithm is None:
-        raise ValueError(f"--algorithm should be set to one of the following values: {str.join('|', WB_ALGORITHMS.keys())}")
+    if gehler and cfg.backend == "rawpy":
+        parser.error("Gehler-shi has no raw files: the rawpy backend supports LSMI only")
+    if gehler and required_illums(algorithm) > 1:
+        parser.error(f"Gehler-Shi is a single-illuminant dataset and does not support {args.wbalgorithm} which needs multiple illuminants")
 
-    if args.input == "Gehler-Shi":
-        pipeline_gehler_shi(save_loc=args.output if args.output is not None else args.wbalgorithm, wb_algorithm=WB_ALGORITHMS[args.wbalgorithm])
-    else:
-        pipeline(datapath=proj_dir.joinpath('data', args.input), save_loc=args.output if args.output is not None else args.wbalgorithm, wb_algorithm=algorithm)
+    samples = iter_gehler_shi(datapath) if gehler else iter_lsmi(datapath, cfg.raw_root)
+
+    out_dir = Path(os.path.join(proj_dir, 'data', (args.output or args.wbalgorithm)))
+    if not args.dry_run:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    run(samples, algorithm, cfg, out_dir, args)
 
 
 def hello_cv():

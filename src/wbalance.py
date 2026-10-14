@@ -1,5 +1,3 @@
-from numpy.core.multiarray import dtype
-from sympy.physics.units import Wb
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path

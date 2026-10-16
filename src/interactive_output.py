@@ -26,7 +26,7 @@ def interactive(render_fn, base_gains):
         q = to_param(cv.getTrackbarPos('R&B/G (q)', win))
         gains = base_gains * user_gains(t, q, ALPHA, BETA)
         out = render_fn(gains)
-        cv.imshow(win, cv.cvtColor(out, cv.COLOR_BGR2RGB))
+        cv.imshow(win, out)
 
     cv.createTrackbar('R/B (t)', win, STEPS, 2*STEPS, refresh)
     cv.createTrackbar('R&B/G (q)', win, STEPS, 2*STEPS, refresh)

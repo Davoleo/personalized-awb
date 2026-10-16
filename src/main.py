@@ -1,3 +1,4 @@
+from src.interactive_output import interactive
 import argparse
 import os
 from collections.abc import Iterator
@@ -15,8 +16,8 @@ from src.datasets import Sample
 from src.datasets import iter_gehler_shi, iter_lsmi
 from src.output import finalize, show_samples
 from src.render_manual import render_manual
-from src.render_rawpy import render_rawpy
-from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant
+from src.render_rawpy import render_rawpy, RawpyRenderer
+from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant, gains
 
 WB_ALGORITHMS = {
     'noop': WBAlgorithm.DISABLED,
@@ -48,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--limit', type=int, default=None, help="Process only the first N samples")
     parser.add_argument('--show', type=int, default=0, metavar='N', help="Show the first N outputs at the end")
     parser.add_argument('--dry-run', action='store_true', default=False, help="Don't write anything")
+    parser.add_argument('--interactive', action='store_true', default=False, help="allow interactive changes to the estimated illuminant by end-user")
     return parser
 
 def get_device() -> str:
@@ -73,6 +75,15 @@ def run(samples: Iterator[Sample], algorithm: WBAlgorithm, cfg: RenderConfig, ou
 
         png = utils.load_linear_rgb(sample.png_path)
         est = estimate_illuminant(algorithm, png, sample.meta, sample.dir_path, sample.place_i)
+
+        if args.interactive:
+            # interactive mode: first valid sample only, no file output
+            renderer = RawpyRenderer(sample.raw_path)
+            try:
+                interactive(lambda g: renderer.render(1.0 / g), gains(est.mixed()))
+            finally:
+                renderer.close()
+            return
 
         if cfg.backend == "rawpy":
             final = render_rawpy(sample.raw_path, est)
@@ -110,11 +121,14 @@ def main():
         parser.error("Gehler-shi has no raw files: the rawpy backend supports LSMI only")
     if gehler and required_illums(algorithm) > 1:
         parser.error(f"Gehler-Shi is a single-illuminant dataset and does not support {args.wbalgorithm} which needs multiple illuminants")
+    if (algorithm == WBAlgorithm.LOCAL_ILLU or cfg.backend == 'manual') and args.interactive:
+        parser.error("--interactive flag is not compatible with local estimate white balancing algorithms or manual backend.")
+
 
     samples = iter_gehler_shi(datapath) if gehler else iter_lsmi(datapath, cfg.raw_root)
 
     out_dir = Path(os.path.join(proj_dir, 'data', (args.output or args.wbalgorithm)))
-    if not args.dry_run:
+    if not args.dry_run and not args.interactive:
         out_dir.mkdir(parents=True, exist_ok=True)
 
     run(samples, algorithm, cfg, out_dir, args)

@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--show', type=int, default=0, metavar='N', help="Show the first N outputs at the end")
     parser.add_argument('--dry-run', action='store_true', default=False, help="Don't write anything")
     parser.add_argument('--interactive', action='store_true', default=False, help="allow interactive changes to the estimated illuminant by end-user")
+    parser.add_argument('--order', choices=['shuffled', 'sorted'], default='sorted', help="whether the dataset should be shuffled or sorted before processing it.")
     return parser
 
 def get_device() -> str:
@@ -125,7 +126,7 @@ def main():
         parser.error("--interactive flag is not compatible with local estimate white balancing algorithms or manual backend.")
 
 
-    samples = iter_gehler_shi(datapath) if gehler else iter_lsmi(datapath, cfg.raw_root)
+    samples = iter_gehler_shi(datapath, args.order) if gehler else iter_lsmi(datapath, cfg.raw_root, args.order)
 
     out_dir = Path(os.path.join(proj_dir, 'data', (args.output or args.wbalgorithm)))
     if not args.dry_run and not args.interactive:

@@ -5,7 +5,7 @@ import numpy as np
 from src import Metadata
 from src.ciexyz import convert_to_ciexyz
 from src.config import RenderConfig
-from src.wbalance import IlluminantEstimate, gains
+from src.wbalance import IlluminantEstimate, ill2gains
 
 Space = Literal["camera", "xyz_d50", "xyz_libraw", "srgb_linear"]
 
@@ -20,17 +20,17 @@ def render_manual(x: np.ndarray, est: IlluminantEstimate, meta: Metadata, cfg: R
     # global estimate: balance with single illuminant then optionally convert.
     if not est.is_local:
         illuminant = est.colors[0]
-        balanced = x * gains(illuminant)
+        balanced = x * ill2gains(illuminant)
         return convert_to_ciexyz(balanced, meta, illuminant) if to_xyz else balanced
 
     # local estimate - one term per light weighted by that light's alpha map
     #     blend: each term is the image balanced with that light alone
     #     mix:   every term is the image balanced with the per-pixel mixed illuminant: only the forward matrix differs per term.
-    shared = x * gains(est.mixed()) if cfg.local_mode == "mix" else None
+    shared = x * ill2gains(est.mixed()) if cfg.local_mode == "mix" else None
 
     out = np.zeros_like(x)
     for k, lum in enumerate(est.colors):
-        balanced = shared if shared is not None else x * gains(lum)
+        balanced = shared if shared is not None else x * ill2gains(lum)
         if to_xyz:
             balanced = convert_to_ciexyz(balanced, meta, lum)
         if est.alpha is None:

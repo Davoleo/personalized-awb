@@ -1,4 +1,3 @@
-from src.interactive_output import interactive
 import argparse
 import os
 from collections.abc import Iterator
@@ -14,10 +13,11 @@ from src import get_project_dir
 from src.config import RenderConfig
 from src.datasets import Sample
 from src.datasets import iter_gehler_shi, iter_lsmi
+from src.interactive_session import run_interactive
 from src.output import finalize, show_samples
 from src.render_manual import render_manual
-from src.render_rawpy import render_rawpy, RawpyRenderer
-from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant, gains
+from src.render_rawpy import render_rawpy
+from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant
 
 WB_ALGORITHMS = {
     'noop': WBAlgorithm.DISABLED,
@@ -62,37 +62,37 @@ def get_device() -> str:
 # noinspection D
 def run(samples: Iterator[Sample], algorithm: WBAlgorithm, cfg: RenderConfig, out_dir: Path, args):
     need = required_illums(algorithm)
-    shown, done = [], 0
 
-    for sample in samples:
-        if args.limit is not None and done >= args.limit:
-            break
-        if sample.meta.n_illums < need:
-            print(f"skipping {sample.name}: n_illums {sample.meta.n_illums} < {need}")
-            continue
-        if cfg.backend == "rawpy" and (sample.raw_path is None or not sample.raw_path.exists()):
-            print(f"skipping {sample.name}: raw_path does not exist ({sample.raw_path})")
-            continue
+    def collect():
+        """Yield (sample, est, png) for every processable sample."""
+        done = 0
+        for sample in samples:
+            if args.limit is not None and done >= args.limit:
+                break
+            if sample.meta.n_illums < need:
+                print(f"skipping {sample.name}: n_illums {sample.meta.n_illums} < {need}")
+                continue
+            if cfg.backend == "rawpy" and (sample.raw_path is None or not sample.raw_path.exists()):
+                print(f"skipping {sample.name}: raw_path does not exist ({sample.raw_path})")
+                continue
 
-        png = utils.load_linear_rgb(sample.png_path)
-        est = estimate_illuminant(algorithm, png, sample.meta, sample.dir_path, sample.place_i)
+            png = utils.load_linear_rgb(sample.png_path)
+            est = estimate_illuminant(algorithm, png, sample.meta, sample.dir_path, sample.place_i)
+            done += 1
+            yield sample, est, png
 
-        if args.interactive:
-            # interactive mode: first valid sample only, no file output
-            renderer = RawpyRenderer(sample.raw_path)
-            try:
-                interactive(lambda g: renderer.render(1.0 / g), gains(est.mixed()))
-            finally:
-                renderer.close()
-            return
+    if args.interactive:
+        run_interactive([(sample, est) for sample, est, _ in collect()])
+        return
 
+    shown = []
+    for sample, est, png in collect():
         if cfg.backend == "rawpy":
             final = render_rawpy(sample.raw_path, est)
         else:
             final = finalize(render_manual(png, est, sample.meta, cfg), cfg)
 
         print(f"done: {sample.name}")
-        done += 1
 
         if len(shown) < args.show:
             shown.append(final)

@@ -67,10 +67,6 @@ class RawpyRenderer:
         self.mask_r = colors == 0
         self.mask_b = colors == 2
         self.orig = self.raw.raw_image.copy()  # copy of the original mosaic
-        # libraw's first postprocess on a fresh object is not idempotent w.r.t. later
-        # renders (even with identical input); run one throwaway pass with the same
-        # params to reach a steady state. A plain default-params warmup is NOT enough.
-        self._postprocess()
 
     def _postprocess(self) -> np.ndarray:
         return self.raw.postprocess(

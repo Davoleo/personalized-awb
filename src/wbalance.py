@@ -51,7 +51,7 @@ class IlluminantEstimate:
         if self.alpha is not None and (self.alpha.ndim != 3 or self.alpha.shape[2] != len(self.colors)):
             raise ValueError(f"alpha must be (H,W, K={len(self.colors)}), got {self.alpha.shape}")
 
-def gains(illuminant: np.ndarray) -> np.ndarray:
+def ill2gains(illuminant: np.ndarray) -> np.ndarray:
     """Per-channel gains to neutralise the illuminant, works both for global and local illuminants"""
     return illuminant[..., 1:2] / illuminant
 

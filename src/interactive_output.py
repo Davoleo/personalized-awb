@@ -1,7 +1,8 @@
 import numpy as np
 import cv2 as cv
 
-ALPHA, BETA = 0.35, 0.25
+ALPHA, BETA = 0.20, 0.15
+#ALPHA, BETA = 0.25, 0.20
 STEPS = 100 # trackbar resolution
 
 def user_gains(t: float, q: float, alpha: float, beta: float) -> np.ndarray:

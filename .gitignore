@@ -15,6 +15,9 @@ wheels/
 # datasets
 data
 
+# survey db
+survey/backend/survey.sqlite
+
 # external libraries, executables and code
 ext/
 

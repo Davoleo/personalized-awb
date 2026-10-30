@@ -4,8 +4,7 @@ import colour
 import numpy as np
 from numpy.typing import ArrayLike
 
-import src.utils as utils
-from src import Metadata, get_project_dir
+from src import Metadata, get_project_dir, utils
 
 STANDARD_A_CCT = 2856
 D65_CCT = 6500

@@ -1,0 +1,169 @@
+{
+  "samples": [
+    {
+      "id": "Place0000",
+      "variants": [
+        {
+          "id": "white_patch",
+          "path": "img/Place0000/white_patch.png"
+        },
+        {
+          "id": "grey_world",
+          "path": "img/Place0000/grey_world.png"
+        },
+        {
+          "id": "illu_map_mean",
+          "path": "img/Place0000/illu_map_mean.png"
+        },
+        {
+          "id": "local_blend",
+          "path": "img/Place0000/local_blend.png"
+        },
+        {
+          "id": "gt",
+          "path": "img/Place0000/gt.jpg"
+        },
+        {
+          "id": "illuminant1",
+          "path": "img/Place0000/illuminant1.png"
+        },
+        {
+          "id": "illuminant2",
+          "path": "img/Place0000/illuminant2.png"
+        }
+      ]
+    },
+    {
+      "id": "Place0001",
+      "variants": [
+        {
+          "id": "white_patch",
+          "path": "img/Place0001/white_patch.png"
+        },
+        {
+          "id": "grey_world",
+          "path": "img/Place0001/grey_world.png"
+        },
+        {
+          "id": "illu_map_mean",
+          "path": "img/Place0001/illu_map_mean.png"
+        },
+        {
+          "id": "local_blend",
+          "path": "img/Place0001/local_blend.png"
+        },
+        {
+          "id": "gt",
+          "path": "img/Place0001/gt.jpg"
+        },
+        {
+          "id": "illuminant1",
+          "path": "img/Place0001/illuminant1.png"
+        },
+        {
+          "id": "illuminant2",
+          "path": "img/Place0001/illuminant2.png"
+        }
+      ]
+    },
+    {
+      "id": "Place0002",
+      "variants": [
+        {
+          "id": "white_patch",
+          "path": "img/Place0002/white_patch.png"
+        },
+        {
+          "id": "grey_world",
+          "path": "img/Place0002/grey_world.png"
+        },
+        {
+          "id": "illu_map_mean",
+          "path": "img/Place0002/illu_map_mean.png"
+        },
+        {
+          "id": "local_blend",
+          "path": "img/Place0002/local_blend.png"
+        },
+        {
+          "id": "gt",
+          "path": "img/Place0002/gt.jpg"
+        },
+        {
+          "id": "illuminant1",
+          "path": "img/Place0002/illuminant1.png"
+        },
+        {
+          "id": "illuminant2",
+          "path": "img/Place0002/illuminant2.png"
+        }
+      ]
+    },
+    {
+      "id": "Place0003",
+      "variants": [
+        {
+          "id": "white_patch",
+          "path": "img/Place0003/white_patch.png"
+        },
+        {
+          "id": "grey_world",
+          "path": "img/Place0003/grey_world.png"
+        },
+        {
+          "id": "illu_map_mean",
+          "path": "img/Place0003/illu_map_mean.png"
+        },
+        {
+          "id": "local_blend",
+          "path": "img/Place0003/local_blend.png"
+        },
+        {
+          "id": "gt",
+          "path": "img/Place0003/gt.jpg"
+        },
+        {
+          "id": "illuminant1",
+          "path": "img/Place0003/illuminant1.png"
+        },
+        {
+          "id": "illuminant2",
+          "path": "img/Place0003/illuminant2.png"
+        }
+      ]
+    },
+    {
+      "id": "Place004",
+      "variants": [
+        {
+          "id": "white_patch",
+          "path": "img/Place004/white_patch.png"
+        },
+        {
+          "id": "grey_world",
+          "path": "img/Place004/grey_world.png"
+        },
+        {
+          "id": "illu_map_mean",
+          "path": "img/Place004/illu_map_mean.png"
+        },
+        {
+          "id": "local_blend",
+          "path": "img/Place004/local_blend.png"
+        },
+        {
+          "id": "gt",
+          "path": "img/Place004/gt.jpg"
+        },
+        {
+          "id": "illuminant1",
+          "path": "img/Place004/illuminant1.png"
+        },
+        {
+          "id": "illuminant2",
+          "path": "img/Place004/illuminant2.png"
+        }
+      ]
+    }
+  ]
+}

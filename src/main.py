@@ -11,13 +11,12 @@ import torch
 import src.utils as utils
 from src import get_project_dir
 from src.config import RenderConfig
-from src.datasets import Sample
-from src.datasets import iter_gehler_shi, iter_lsmi
+from src.datasets import Sample, iter_gehler_shi, iter_lsmi
 from src.interactive_session import run_interactive
 from src.output import finalize, show_samples
 from src.render_manual import render_manual
 from src.render_rawpy import render_rawpy
-from src.wbalance import WBAlgorithm, required_illums, estimate_illuminant
+from src.wbalance import WBAlgorithm, estimate_illuminant, required_illums
 
 WB_ALGORITHMS = {
     'noop': WBAlgorithm.DISABLED,
@@ -126,7 +125,8 @@ def main():
         parser.error("--interactive flag is not compatible with local estimate white balancing algorithms or manual backend.")
 
 
-    samples = iter_gehler_shi(datapath, args.order) if gehler else iter_lsmi(datapath, cfg.raw_root, args.order)
+    shuffled = args.order == 'shuffled'
+    samples = iter_gehler_shi(datapath, shuffled) if gehler else iter_lsmi(datapath, cfg.raw_root, shuffled)
 
     out_dir = Path(os.path.join(proj_dir, 'data', (args.output or args.wbalgorithm)))
     if not args.dry_run and not args.interactive:

@@ -22,3 +22,6 @@ survey/backend/survey.sqlite
 ext/
 
 AGENTS.md
+
+# node.js
+node_modules

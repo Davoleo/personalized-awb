@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlite3 import Connection
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.db import get_conn, init_db
@@ -32,12 +33,12 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Personalized AWB survey", lifespan=lifespan)
 
 # allows svelte dev server (Vite, port 5173) to call the API during development
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:5173"],
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @lru_cache
 def get_manifest() -> dict:

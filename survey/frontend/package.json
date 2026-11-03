@@ -1,0 +1,25 @@
+{
+	"name": "survey-frontend",
+	"version": "1.0.0",
+	"description": "A frontend using Svelte for the survey web app.",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Davoleo/personalized-awb.git"
+	},
+	"author": "Davoleo",
+	"bugs": {
+		"url": "https://github.com/Davoleo/personalized-awb/issues"
+	},
+	"homepage": "https://github.com/Davoleo/personalized-awb#readme",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"svelte": "^5.57.3",
+		"vite": "^8.3.5"
+	}
+}

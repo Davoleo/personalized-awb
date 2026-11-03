@@ -1,0 +1,28 @@
+* { box-sizing: border-box; }
+
+/* neutral mid grey page to reduce color distractions as possible */
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background-color: #8A8A8A;
+    color: #111111;
+}
+
+main { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+
+.card { background-color: #D9D9D9; border-radius: 8px; padding: 1.25rem }
+.hint { margin: 0.25rem 0 1rem}
+.error { color: #7A0000; font-weight: 600 }
+
+button {
+    font: inherit;
+    padding: 0.5rem 1rem;
+    border: 1px solid #444444;
+    border-radius: 6px;
+    background-color: #EEEEEE;
+    color: #111111;
+    cursor: pointer;
+}
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background-color: #222222; color: #FFFFFF; border-color: #222222; }

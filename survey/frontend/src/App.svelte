@@ -22,7 +22,7 @@
 
 <main>
     {#if session.status === 'loading'}
-        <p>{t('common.landing')}</p>
+        <p>{t('common.leading')}</p>
     {:else if session.status === 'landing'}
         <Landing />
     {:else if session.status === 'trial' }

@@ -11,7 +11,7 @@
   "trial.confirm.asis": "Conferma",
   "trial.confirm.adjusted": "Conferma con aggiustamenti.",
   "question.balanced": "Quale tra le seguenti immagini ti sembra bilanciata nel modo più corretto?",
-  "question.balacned.hint": "Un'immagine ben bilanciata non ha dominanti di colore troppo aggressive, in tal caso i bianchi e i grigi nell'imagine appaiono neutri.",
+  "question.balanced.hint": "Un'immagine ben bilanciata non ha dominanti di colore troppo aggressive, in tal caso i bianchi e i grigi nell'imagine appaiono neutri.",
   "question.best": "Quale immagine ti sembra la migliore?",
   "question.best.hint": "Scegli quella che preferisci, opzionalmente aggiustando i parametri per ottenere il risultato desiderato, se nessun'altra opzione è allineata con esso.",
   "grid.option": "Opzione {label}",
@@ -19,7 +19,7 @@
   "slider.t.left": "Più fredda",
   "slider.t.right": "Più calda",
   "slider.q.left": "Più verde",
-  "slider.q.riht": "Più magenta",
+  "slider.q.right": "Più magenta",
   "slider.reset": "Ripristina controlli",
   "done.heading": "Grazie per aver partecipato.",
   "done.body": "Le risposte sono state salvate. Puoi chiudere questa pagina."

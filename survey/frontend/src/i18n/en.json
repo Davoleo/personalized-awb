@@ -11,7 +11,7 @@
   "trial.confirm.asis": "Confirm",
   "trial.confirm.adjusted": "Confirm with my adjustments.",
   "question.balanced": "Which image looks balanced most correctly?",
-  "question.balacned.hint": "A well-balanced image has no color cast: whites and greys look neutral.",
+  "question.balanced.hint": "A well-balanced image has no color cast: whites and greys look neutral.",
   "question.best": "Which image looks best to you?",
   "question.best.hint": "Pick the one you like the most.",
   "grid.option": "Option {label}",
@@ -19,7 +19,7 @@
   "slider.t.left": "Cooler",
   "slider.t.right": "Warmer",
   "slider.q.left": "Greener",
-  "slider.q.riht": "More magenta",
+  "slider.q.right": "More magenta",
   "slider.reset": "Reset controls",
   "done.heading": "Thank you!",
   "done.body": "Your answers have been saved. You can close this page now."

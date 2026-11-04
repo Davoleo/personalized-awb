@@ -103,7 +103,8 @@ def submit_answer(body: Answer):
                      response_time_ms=excluded.response_time_ms,
                      created_at=excluded.created_at""",
              (
-                 body.participant_id, body.question_index, trial_json["sample_id"], body.question_type, body.chosen_variant
+                 body.participant_id, body.question_index, trial_json["sample_id"], body.question_type,
+                 body.chosen_variant, body.response_time_ms, now()
              )
         )
     return {"ok": True}

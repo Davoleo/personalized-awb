@@ -17,7 +17,7 @@
 
     // A,B,C in shuffled order via plan
     const variants = $derived(
-        step.trial.variant_order.map((id, i) => ({
+        step.question.variant_order.map((id, i) => ({
             id,
             label: String.fromCharCode(65+i),
             url: variantUrl(step.question.sample_id, id)
@@ -39,14 +39,14 @@
         error = null;
         try {
             await submitStep({
-                trialIndex: step.question.question_index,
-                question: step.question_type,
+                questionIndex: step.question.question_index,
+                questionType: step.question_type,
                 chosen: selected,
                 responseTimeMs: pickTimeMs,
                 adjustment: { t: valueT, q: valueQ, confirmedAsIs: !adjusted},
             });
         } catch (e) {
-            error = e.message;
+            error = e.message + ' : ' + (e.detail ?? '');
             submitting = false;
         }
     }

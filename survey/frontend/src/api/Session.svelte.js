@@ -44,7 +44,7 @@ function isAnswered(trialIndex, type) {
 }
 
 export function currentStep() {
-    return allSteps().find(step => !isAnswered(step.trial.question_index, step.question)) ?? null
+    return allSteps().find(step => !isAnswered(step.question.question_index, step.question_type)) ?? null
 }
 
 export function progress() {
@@ -52,7 +52,7 @@ export function progress() {
 }
 
 export function variantUrl(sampleId, variantId) {
-    const sample = session.manifest.sample.find(sample => sample.id === sampleId)
+    const sample = session.manifest.samples.find(sample => sample.id === sampleId)
     const variant = sample.variants.find(variant => variant.id === variantId)
     return `/assets/${variant.path}`
 }
@@ -102,19 +102,19 @@ export async function start() {
 }
 
 /** save answer [picked variant + slide adjustments] */
-export async function submitStep({ trialIndex, questionType, chosen, responseTimeMs, adjustment }){
+export async function submitStep({ questionIndex, questionType, chosen, responseTimeMs, adjustment }){
     const id = session.participantId;
 
     await api.submitTrial({
         participant_id: id,
-        question_index: trialIndex,
+        question_index: questionIndex,
         question_type: questionType,
         chosen_variant: chosen,
         response_time_ms: responseTimeMs,
     });
     await api.submitAdjustment({
         participant_id: id,
-        question_index: trialIndex,
+        question_index: questionIndex,
         question_type: questionType,
         base_variant: chosen,
         final_t: adjustment.t,
@@ -122,7 +122,7 @@ export async function submitStep({ trialIndex, questionType, chosen, responseTim
         confirmed_as_is: adjustment.confirmedAsIs,
     });
 
-    session.answered.push({trialIndex: trialIndex, questionType: questionType});
+    session.answered.push({question_index: questionIndex, question_type: questionType});
 
     if (!currentStep()) {
         await api.finish(id)

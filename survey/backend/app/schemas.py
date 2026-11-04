@@ -21,6 +21,7 @@ class PlannedQuestion(BaseModel):
     sample_id: str #? or int Place1 or 1 to chose
     kind: Literal["normal", "repeat"]
     variant_order: list[str]
+    question_order: list[QuestionType]
 
 class ParticipantState(BaseModel):
     participant_id: str

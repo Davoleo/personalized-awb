@@ -42,6 +42,7 @@ def make_plan(
             "sample_id": sid,
             "kind": kind,
             "variant_order": variants,
+            "question_order": QUESTION_ORDER
         })
     return plan
 

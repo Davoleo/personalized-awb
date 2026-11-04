@@ -21,7 +21,7 @@
 <section class="card">
     <h2>{t('landing.heading')}</h2>
     <p>{t('landing.intro')}</p>
-    <p>{t('landing tips')}</p>
+    <p>{t('landing.tips')}</p>
 
     <!--? demographics form maybe -->
 

@@ -76,7 +76,7 @@ def create_participant(body: Participant):
                      ))
     return ParticipantState(participant_id=participant_id, plan=plan, answered=[])
 
-@app.get("api/participants/{participant_id}", response_model=ParticipantState, status_code=200)
+@app.get("/api/participants/{participant_id}", response_model=ParticipantState, status_code=200)
 def get_participant(participant_id: str):
     with get_conn() as conn:
         row = get_participant_row(conn, participant_id)
@@ -87,7 +87,7 @@ def get_participant(participant_id: str):
         ]
     return ParticipantState(participant_id=participant_id, plan=json.loads(row["plan_json"]), answered=answered)
 
-@app.post("api/trials", status_code=201)
+@app.post("/api/trials", status_code=201)
 def submit_answer(body: Answer):
     with get_conn() as conn:
         row = get_participant_row(conn, body.participant_id)
@@ -108,7 +108,7 @@ def submit_answer(body: Answer):
         )
     return {"ok": True}
 
-@app.post("api/adjustments", status_code=201)
+@app.post("/api/adjustments", status_code=201)
 def submit_adjustment(body: UserAdjustment):
     with get_conn() as conn:
         row = get_participant_row(conn, body.participant_id)

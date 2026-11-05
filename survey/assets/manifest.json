@@ -133,35 +133,35 @@
       ]
     },
     {
-      "id": "Place004",
+      "id": "Place0004",
       "variants": [
         {
           "id": "white_patch",
-          "path": "img/Place004/white_patch.png"
+          "path": "img/Place0004/white_patch.png"
         },
         {
           "id": "grey_world",
-          "path": "img/Place004/grey_world.png"
+          "path": "img/Place0004/grey_world.png"
         },
         {
           "id": "illu_map_mean",
-          "path": "img/Place004/illu_map_mean.png"
+          "path": "img/Place0004/illu_map_mean.png"
         },
         {
           "id": "local_blend",
-          "path": "img/Place004/local_blend.png"
+          "path": "img/Place0004/local_blend.png"
         },
         {
           "id": "gt",
-          "path": "img/Place004/gt.jpg"
+          "path": "img/Place0004/gt.jpg"
         },
         {
           "id": "illuminant1",
-          "path": "img/Place004/illuminant1.png"
+          "path": "img/Place0004/illuminant1.png"
         },
         {
           "id": "illuminant2",
-          "path": "img/Place004/illuminant2.png"
+          "path": "img/Place0004/illuminant2.png"
         }
       ]
     }

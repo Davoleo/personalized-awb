@@ -3,6 +3,7 @@
     import { variantUrl, submitStep } from "../api/Session.svelte.js";
     import VariantGrid from "./VariantGrid.svelte";
     import SliderPanel from "./SliderPanel.svelte";
+    import Preview from "./Preview.svelte";
 
     let { step } = $props();
 
@@ -57,6 +58,10 @@
     <p class="hint">{t(`question.${step.question_type}.hint`)}</p>
 
     <VariantGrid variants={variants} {selected} onselect={pick} />
+
+    {#if selected}
+        <Preview variantUrl={variantUrl(step.question.sample_id, selected)} t={valueT} q={valueQ} />
+    {/if}
 
     <SliderPanel bind:valueT bind:valueQ disabled={!selected} />
 

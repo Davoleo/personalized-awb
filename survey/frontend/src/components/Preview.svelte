@@ -18,5 +18,12 @@
     </filter>
 </svg>
 
-<img src={variantUrl} alt="" style:filter="url(#p-awb)" />
+<img src={variantUrl} class="fit-horizontal" alt="" style:filter="url(#p-awb)" />
 
+<style>
+    .fit-horizontal {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+</style>

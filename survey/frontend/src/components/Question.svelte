@@ -60,7 +60,7 @@
     <VariantGrid variants={variants} {selected} onselect={pick} />
 
     {#if selected}
-        <Preview variantUrl={variantUrl(step.question.sample_id, selected)} t={valueT} q={valueQ} />
+        <Preview variantUrl={variantUrl(step.question.sample_id, selected)} bind:t={valueT} bind:q={valueQ} />
     {/if}
 
     <SliderPanel bind:valueT bind:valueQ disabled={!selected} />

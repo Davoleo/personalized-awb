@@ -81,8 +81,8 @@ def get_participant(participant_id: str):
     with get_conn() as conn:
         row = get_participant_row(conn, participant_id)
         answered = [
-            QuestionKey(question_index=trial["trial_index"], question_type=trial["question_type"])
-            for trial in conn.execute("SELECT trial_index, question_type FROM trials WHERE participant_id = ?",
+            QuestionKey(question_index=trial["trial_index"])
+            for trial in conn.execute("SELECT trial_index FROM trials WHERE participant_id = ?",
                                       (participant_id,))
         ]
     return ParticipantState(participant_id=participant_id, plan=json.loads(row["plan_json"]), answered=answered)
@@ -96,14 +96,14 @@ def submit_answer(body: Answer):
             raise HTTPException(422, "chosen_variant was not shown in this trial")
         # upsert: resubmit = replace
         conn.execute("""INSERT INTO trials 
-            (participant_id, trial_index, sample_id, question_type, chosen_variant, response_time_ms, created_at)
-            VALUES (?,?,?,?,?,?,?)
-            ON CONFLICT (participant_id, trial_index, question_type) DO UPDATE SET
+            (participant_id, trial_index, sample_id, chosen_variant, response_time_ms, created_at)
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT (participant_id, trial_index) DO UPDATE SET
                      chosen_variant=excluded.chosen_variant,
                      response_time_ms=excluded.response_time_ms,
                      created_at=excluded.created_at""",
              (
-                 body.participant_id, body.question_index, trial_json["sample_id"], body.question_type,
+                 body.participant_id, body.question_index, trial_json["sample_id"],
                  body.chosen_variant, body.response_time_ms, now()
              )
         )
@@ -117,16 +117,16 @@ def submit_adjustment(body: UserAdjustment):
         if body.base_variant not in trial["variant_order"]:
             raise HTTPException(422, "submitted variant was not shown in this trial")
         conn.execute("""INSERT INTO adjustments
-                     (participant_id, trial_index, sample_id, question_type, base_variant, final_t, final_q, confirmed_as_is, created_at)
-                     VALUES (?,?,?,?,?,?,?,?,?)
-                     ON CONFLICT (participant_id, trial_index, question_type) DO UPDATE SET
+                     (participant_id, trial_index, sample_id, base_variant, final_t, final_q, confirmed_as_is, created_at)
+                     VALUES (?,?,?,?,?,?,?,?)
+                     ON CONFLICT (participant_id, trial_index) DO UPDATE SET
                         base_variant=excluded.base_variant,
                         final_t=excluded.final_t,
                         final_q=excluded.final_q,
                         confirmed_as_is=excluded.confirmed_as_is,
                         created_at=excluded.created_at""",
                      (
-                         body.participant_id, body.question_index, trial["sample_id"], body.question_type,
+                         body.participant_id, body.question_index, trial["sample_id"],
                          body.base_variant, body.final_t, body.final_q, int(body.confirmed_as_is), now()
                      )
         )

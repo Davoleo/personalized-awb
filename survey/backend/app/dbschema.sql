@@ -15,11 +15,10 @@ CREATE TABLE IF NOT EXISTS trials (
     participant_id      TEXT NOT NULL REFERENCES participants(id),
     trial_index         INTEGER NOT NULL,
     sample_id           TEXT NOT NULL,
-    question_type       TEXT NOT NULL,
     chosen_variant      TEXT NOT NULL,  -- variant id = algorithm id
     response_time_ms    INTEGER NOT NULL,
     created_at          TEXT NOT NULL,
-    UNIQUE (participant_id, trial_index, question_type)
+    UNIQUE (participant_id, trial_index)
 );
 
 CREATE TABLE IF NOT EXISTS adjustments (
@@ -27,11 +26,10 @@ CREATE TABLE IF NOT EXISTS adjustments (
     participant_id      TEXT NOT NULL REFERENCES participants(id),
     trial_index         INTEGER NOT NULL,
     sample_id           TEXT NOT NULL,
-    question_type       TEXT NOT NULL,
     base_variant        TEXT NOT NULL,
     final_t             REAL NOT NULL,
     final_q             REAL NOT NULL,
     confirmed_as_is     INTEGER NOT NULL,
     created_at          TEXT NOT NULL,
-    UNIQUE (participant_id, trial_index, question_type)
+    UNIQUE (participant_id, trial_index)
 )

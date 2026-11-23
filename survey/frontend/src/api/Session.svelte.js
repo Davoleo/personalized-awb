@@ -32,19 +32,17 @@ export const session = $state({
 // --- helpers ---
 
 export function allSteps() {
-    return session.plan.flatMap(question =>
-        question.question_order.map(qType => ({question: question, question_type: qType})),
-    );
+    return session.plan;
 }
 
-function isAnswered(trialIndex, type) {
+function isAnswered(trialIndex) {
     return session.answered.some(
-        a => a.question_index === trialIndex && a.question_type === type
+        a => a.question_index === trialIndex
     );
 }
 
 export function currentStep() {
-    return allSteps().find(step => !isAnswered(step.question.question_index, step.question_type)) ?? null
+    return allSteps().find(step => !isAnswered(step.question_index)) ?? null
 }
 
 export function progress() {
@@ -102,27 +100,25 @@ export async function start() {
 }
 
 /** save answer [picked variant + slide adjustments] */
-export async function submitStep({ questionIndex, questionType, chosen, responseTimeMs, adjustment }){
+export async function submitStep({ questionIndex, chosen, responseTimeMs, adjustment }){
     const id = session.participantId;
 
     await api.submitTrial({
         participant_id: id,
         question_index: questionIndex,
-        question_type: questionType,
         chosen_variant: chosen,
         response_time_ms: responseTimeMs,
     });
     await api.submitAdjustment({
         participant_id: id,
         question_index: questionIndex,
-        question_type: questionType,
         base_variant: chosen,
         final_t: adjustment.t,
         final_q: adjustment.q,
         confirmed_as_is: adjustment.confirmedAsIs,
     });
 
-    session.answered.push({question_index: questionIndex, question_type: questionType});
+    session.answered.push({question_index: questionIndex});
 
     if (!currentStep()) {
         await api.finish(id)

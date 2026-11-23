@@ -5,8 +5,6 @@ from typing import Any, Literal
 # placeholders constants
 N_SAMPLES = 15
 N_REPEATS = 2   # n samples shown a second time to measure consistency
-QUESTION_ORDER = ["balanced", "best"] #? randomized per participant or fixed?
-
 
 def make_plan(
         manifest: dict,
@@ -42,7 +40,6 @@ def make_plan(
             "sample_id": sid,
             "kind": kind,
             "variant_order": variants,
-            "question_order": QUESTION_ORDER
         })
     return plan
 

@@ -9,7 +9,7 @@
     //preload next trial
     $effect(() => {
         if (!step) return;
-        const next = session.plan[step.question.question_index + 1];
+        const next = session.plan[step.question_index + 1];
         if (!next) return;
         for (const id of next.variant_order) {
             new Image().src = variantUrl(next.sample_id, id)
@@ -22,7 +22,7 @@
     <progress value={counts.done} max="{counts.total}"></progress>
 
     <!-- {#key} - resets Question local state for every step and forces re-rendering. -->
-    {#key `${step.question.question_index}-${step.question_type}`}
+    {#key `${step.question_index}`}
         <Question {step} />
     {/key}
 {/if}

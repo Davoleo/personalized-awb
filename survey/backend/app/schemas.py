@@ -3,7 +3,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-QuestionType = Literal["balanced", "best"]
 
 class Participant(BaseModel):
     language: Literal["en", "it"]
@@ -14,14 +13,12 @@ class Participant(BaseModel):
 
 class QuestionKey(BaseModel):
     question_index: int
-    question_type: QuestionType
 
 class PlannedQuestion(BaseModel):
     question_index: int
     sample_id: str #? or int Place1 or 1 to chose
     kind: Literal["normal", "repeat"]
     variant_order: list[str]
-    question_order: list[QuestionType]
 
 class ParticipantState(BaseModel):
     participant_id: str
@@ -31,14 +28,12 @@ class ParticipantState(BaseModel):
 class Answer(BaseModel):
     participant_id: str
     question_index: int
-    question_type: QuestionType
     chosen_variant: str
     response_time_ms: int = Field(ge=0)
 
 class UserAdjustment(BaseModel):
     participant_id: str
     question_index: int
-    question_type: QuestionType
     base_variant: str   # variant the adjustment was applied on.
     final_t: float = Field(ge=-1, le=1)
     final_q: float = Field(ge=-1, le=1)

@@ -18,10 +18,10 @@
 
     // A,B,C in shuffled order via plan
     const variants = $derived(
-        step.question.variant_order.map((id, i) => ({
+        step.variant_order.map((id, i) => ({
             id,
             label: String.fromCharCode(65+i),
-            url: variantUrl(step.question.sample_id, id)
+            url: variantUrl(step.sample_id, id)
         })),
     );
 
@@ -40,8 +40,7 @@
         error = null;
         try {
             await submitStep({
-                questionIndex: step.question.question_index,
-                questionType: step.question_type,
+                questionIndex: step.question_index,
                 chosen: selected,
                 responseTimeMs: pickTimeMs,
                 adjustment: { t: valueT, q: valueQ, confirmedAsIs: !adjusted},
@@ -54,13 +53,13 @@
 </script>
 
 <section class="card">
-    <h2>{t(`question.${step.question_type}`)}</h2>
-    <p class="hint">{t(`question.${step.question_type}.hint`)}</p>
+    <h2>{t(`question`)}</h2>
+    <p class="hint">{t(`question.hint`)}</p>
 
     <VariantGrid variants={variants} {selected} onselect={pick} />
 
     {#if selected}
-        <Preview variantUrl={variantUrl(step.question.sample_id, selected)} bind:t={valueT} bind:q={valueQ} />
+        <Preview variantUrl={variantUrl(step.sample_id, selected)} bind:t={valueT} bind:q={valueQ} />
     {/if}
 
     <SliderPanel bind:valueT bind:valueQ disabled={!selected} />

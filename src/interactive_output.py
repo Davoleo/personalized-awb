@@ -1,5 +1,8 @@
-import numpy as np
 import cv2 as cv
+import numpy as np
+
+from src.ttetest import emulate_browser
+from src.utils import fit_cam_to_linear_srgb
 
 ALPHA, BETA = 0.20, 0.15
 #ALPHA, BETA = 0.25, 0.20
@@ -26,11 +29,24 @@ def interactive(samples):
         return (val-STEPS) / STEPS
 
     def refresh(_=None):
-        _, base_gains, render_fn = samples[idx]
+        label, base_gains, render_fn = samples[idx]
         t = to_param(cv.getTrackbarPos('R/B (t)', win))
         q = to_param(cv.getTrackbarPos('R&B/G (q)', win))
-        gains = base_gains * user_gains(t, q, ALPHA, BETA)
-        cv.imshow(win, render_fn(gains))
+        u = user_gains(t, q, ALPHA, BETA)
+
+        place_id = label.split('_')
+        print(f'data/sony_superraw/{place_id[0]}/{label}'.replace('.png', '.arw'))
+        # M = fit_cam_to_linear_srgb(f'data/sony_superraw/{place_id[0]}/{label}'.replace('.png', '.arw'))
+        # variant_rgb = cv.cvtColor(render_fn(base_gains), cv.COLOR_BGR2RGB)
+        expected_rgb = cv.cvtColor(render_fn(base_gains * u), cv.COLOR_BGR2RGB)
+        # emulated_rgb = emulate_browser(variant_rgb, M, u)
+
+        # diagnose(expected_rgb, emulated_rgb, variant_rgb)
+
+        # diff = np.abs(expected_rgb.astype(int) - emulated_rgb.astype(int))
+        # print("mean:", diff.mean(), "| 99th pct:", np.percentile(diff, 99), "| max:", diff.max())
+
+        cv.imshow(win, cv.cvtColor(expected_rgb, cv.COLOR_RGB2BGR))
 
     def switch(d):
         nonlocal idx
@@ -59,3 +75,14 @@ def interactive(samples):
             switch(-1)
 
     cv.destroyAllWindows()
+
+def diagnose(expected, emulated, variant):
+    diff = emulated.astype(int).reshape(-1, 3) - expected.astype(int).reshape(-1, 3)
+    pixels = variant.reshape(-1, 3)
+
+    print("signed mean diff (R, G, B):", diff.mean(axis=0))
+
+    # exclude highlights (already clipped in the variant) and deep shadows
+    mid = (pixels.max(axis=1) < 200) & (pixels.min(axis=1) > 20)
+    print("mean abs diff, mid-tones only:", np.abs(diff[mid]).mean())
+    print("mean abs diff, highlights   :", np.abs(diff[~mid]).mean())

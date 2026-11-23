@@ -6,8 +6,10 @@ import cv2
 import numpy as np
 import rawpy
 
-import src.preprocess as preprocess
+from src import preprocess
 from src.wbalance import IlluminantEstimate
+
+ENCODE_SRGB_MATRIX=False
 
 def _wb_channel(vis: np.ndarray, mask: np.ndarray, black: int, gain):
     """Apply (v - black) * gain + black with clipping to the masked pixels in place."""
@@ -74,8 +76,8 @@ class RawpyRenderer:
             user_wb=[1, 1, 1, 1],  # white balance is already applied to the mosaic
             no_auto_bright=True,
             half_size=True,
-            output_color=rawpy.ColorSpace.sRGB,
-            #gamma=(2.4, 12.92),              # dcraw's setting for the sRGB curve (rawpy's default is BT.709)
+            output_color=rawpy.ColorSpace.raw if ENCODE_SRGB_MATRIX else rawpy.ColorSpace.sRGB,
+            gamma=(2.4, 12.92),              # dcraw's setting for the sRGB curve (rawpy's default is BT.709)
             output_bps=8,
         )
 

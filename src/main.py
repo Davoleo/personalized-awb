@@ -8,8 +8,7 @@ import cv2 as cv
 import numpy as np
 import torch
 
-import src.utils as utils
-from src import get_project_dir
+from src import get_project_dir, utils
 from src.config import RenderConfig
 from src.datasets import Sample, iter_gehler_shi, iter_lsmi
 from src.interactive_session import run_interactive
@@ -75,7 +74,7 @@ def run(samples: Iterator[Sample], algorithm: WBAlgorithm, cfg: RenderConfig, ou
                 print(f"skipping {sample.name}: raw_path does not exist ({sample.raw_path})")
                 continue
 
-            png = utils.load_linear_rgb(sample.png_path)
+            png = utils.load2rgb_uin16(sample.png_path)
             est = estimate_illuminant(algorithm, png, sample.meta, sample.dir_path, sample.place_i)
             done += 1
             yield sample, est, png
